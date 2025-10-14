@@ -55,15 +55,19 @@ static camera_config_t camera_config = {
 httpd_handle_t stream_httpd = NULL;
 httpd_handle_t camera_httpd = NULL;
 
-// WebSocket клиент
-static httpd_handle_t ws_client = NULL;
+// Простой флаг блокировки
+static bool client_active = false;
 
-// HTML страница с одной кнопкой по WebSocket
+// Состояние вспышки
+static bool flash_state = false;
+#define FLASH_GPIO_NUM 4
+
+// HTML страница
 static const char *MAIN_page = R"rawliteral(
 <!DOCTYPE html>
 <html>
 <head>
-    <title>ESP32-CAM + WebSocket</title>
+    <title>ESP32-CAM Stream</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: Arial; text-align: center; margin: 20px; }
@@ -85,7 +89,7 @@ static const char *MAIN_page = R"rawliteral(
     </style>
 </head>
 <body>
-    <h1>ESP32-CAM + WebSocket Button</h1>
+    <h1>ESP32-CAM Stream</h1>
     
     <div class="status disconnected" id="status">
         Disconnected - Click to connect
@@ -95,8 +99,8 @@ static const char *MAIN_page = R"rawliteral(
     
     <br>
     
-    <button onclick="sendButtonClick()" id="mainButton" disabled>
-        CLICK ME (WebSocket)
+    <button onclick="sendFlashToggle()" id="mainButton" disabled>
+        🔦 Toggle Flash
     </button>
 
     <script>
@@ -136,10 +140,10 @@ static const char *MAIN_page = R"rawliteral(
             };
         }
         
-        function sendButtonClick() {
+        function sendFlashToggle() {
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send('button_click');
-                document.getElementById('status').textContent = 'Button clicked! Waiting response...';
+                ws.send('toggle_flash');
+                document.getElementById('status').textContent = 'Toggling flash...';
             }
         }
         
@@ -155,11 +159,24 @@ static const char *MAIN_page = R"rawliteral(
 esp_err_t init_camera() {
   esp_err_t err = esp_camera_init(&camera_config);
   if (err != ESP_OK) {
-    Serial.printf("Camera init failed: 0x%x\n", err);
+    Serial.printf("Ошибка инициализации камеры: 0x%x\n", err);
     return err;
   }
-  Serial.println("Camera initialized");
+  Serial.println("Камера инициализирована");
+
+  // Инициализация вспышки
+  pinMode(FLASH_GPIO_NUM, OUTPUT);
+  digitalWrite(FLASH_GPIO_NUM, LOW);
+  Serial.println("Flash initialized on GPIO 4");
+
   return ESP_OK;
+}
+
+// Функция переключения вспышки
+void toggle_flash() {
+  flash_state = !flash_state;
+  digitalWrite(FLASH_GPIO_NUM, flash_state ? HIGH : LOW);
+  Serial.printf("Flash toggled to %s\n", flash_state ? "ON" : "OFF");
 }
 
 // WebSocket handler
@@ -199,14 +216,14 @@ static esp_err_t websocket_handler(httpd_req_t *req) {
       buf[ws_pkt.len] = '\0';
       Serial.printf("WebSocket received: %s\n", buf);
 
-      if (strcmp((char *)buf, "button_click") == 0) {
-        Serial.println("=== WEB SOCKET BUTTON CLICKED ===");
-        Serial.println("Message: Hello from WebSocket!");
+      if (strcmp((char *)buf, "toggle_flash") == 0) {
+        Serial.println("=== FLASH TOGGLE ===");
+        toggle_flash();
         Serial.println("Time: " + String(millis()));
-        Serial.println("=== ========================= ===");
+        Serial.println("=== ============= ===");
 
         // Send response back
-        const char *response = "Button received! Check Serial monitor";
+        const char *response = "Flash toggled!";
         httpd_ws_frame_t resp_pkt;
         resp_pkt.payload = (uint8_t *)response;
         resp_pkt.len = strlen(response);
@@ -224,6 +241,16 @@ static esp_err_t websocket_handler(httpd_req_t *req) {
 
 // Обработчик для стрима
 static esp_err_t stream_handler(httpd_req_t *req) {
+  // Блокируем доступ если уже есть клиент
+  if (client_active) {
+    Serial.println("Stream rejected - client already active");
+    httpd_resp_send_404(req);
+    return ESP_FAIL;
+  }
+
+  client_active = true;
+  Serial.println("Stream started - client locked");
+
   camera_fb_t *fb = NULL;
   esp_err_t res = ESP_OK;
   size_t _jpg_buf_len = 0;
@@ -231,8 +258,10 @@ static esp_err_t stream_handler(httpd_req_t *req) {
   char part_buf[64];
 
   res = httpd_resp_set_type(req, "multipart/x-mixed-replace;boundary=frame");
-  if (res != ESP_OK)
+  if (res != ESP_OK) {
+    client_active = false;
     return res;
+  }
 
   while (true) {
     fb = esp_camera_fb_get();
@@ -269,15 +298,44 @@ static esp_err_t stream_handler(httpd_req_t *req) {
       _jpg_buf = NULL;
     }
 
-    if (res != ESP_OK)
+    if (res != ESP_OK) {
       break;
+    }
     delay(50);
   }
+
+  client_active = false;
+  Serial.println("Stream ended - client unlocked");
   return res;
 }
 
 // Обработчик для главной страницы
 static esp_err_t index_handler(httpd_req_t *req) {
+  // Блокируем доступ если уже есть клиент со стримом
+  if (client_active) {
+    const char *busy_page = R"rawliteral(
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Device Busy</title>
+            <style>
+                body { font-family: Arial; text-align: center; margin: 50px; }
+                h1 { color: #f44336; }
+            </style>
+        </head>
+        <body>
+            <h1>🚫 Device Busy</h1>
+            <p>Device is currently streaming to another client.</p>
+            <p>Please try again later.</p>
+            <button onclick="location.reload()">Retry</button>
+        </body>
+        </html>
+        )rawliteral";
+
+    httpd_resp_set_type(req, "text/html");
+    return httpd_resp_send(req, busy_page, strlen(busy_page));
+  }
+
   httpd_resp_set_type(req, "text/html");
   String page = MAIN_page;
   page.replace("IP_ADDRESS", WiFi.localIP().toString().c_str());
@@ -288,7 +346,7 @@ static esp_err_t index_handler(httpd_req_t *req) {
 void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 80;
-  config.ctrl_port = 32768; // Явно указываем порт управления
+  config.ctrl_port = 32768;
 
   // Главный сервер на порту 80
   httpd_uri_t index_uri = {
@@ -314,7 +372,7 @@ void startCameraServer() {
 
   // Сервер для стрима на порту 81
   config.server_port = 81;
-  config.ctrl_port = 32769; // Разный порт управления!
+  config.ctrl_port = 32769;
 
   httpd_uri_t stream_uri = {
       .uri = "/stream",
@@ -325,22 +383,29 @@ void startCameraServer() {
   Serial.printf("Starting stream server on port: '%d'\n", config.server_port);
   if (httpd_start(&stream_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(stream_httpd, &stream_uri);
-  } else {
-    Serial.println("Stream server start failed - but main server is running");
+    Serial.println("Stream server started on port 81");
   }
 }
 
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-  Serial.begin(115200);
-  Serial.println("=== ESP32-CAM + WebSocket ===");
 
+  Serial.begin(115200);
+  Serial.setDebugOutput(true);
+  Serial.println();
+  Serial.println("=== ESP32-CAM with WebSocket Flash Control ===");
+
+  // Инициализация камеры
   if (init_camera() != ESP_OK) {
+    Serial.println("Перезагрузка через 5 секунд...");
     delay(5000);
     ESP.restart();
   }
 
+  // Подключение к WiFi
+  Serial.print("Подключение к WiFi");
   WiFi.begin("bogdan", "seredenko ");
+
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < 20) {
     delay(500);
@@ -349,9 +414,16 @@ void setup() {
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi connected! IP: " + WiFi.localIP().toString());
-    startCameraServer();
+    Serial.println("\nWiFi подключен!");
+    Serial.print("IP адрес: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\nОшибка подключения к WiFi!");
+    return;
   }
+
+  // Запуск серверов
+  startCameraServer();
 }
 
 void loop() {
