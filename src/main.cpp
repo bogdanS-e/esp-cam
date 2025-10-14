@@ -1,3 +1,4 @@
+#include "LittleFS.h"
 #include "esp_camera.h"
 #include "esp_http_server.h"
 #include "esp_timer.h"
@@ -47,9 +48,9 @@ static camera_config_t camera_config = {
     .ledc_timer = LEDC_TIMER_0,
     .ledc_channel = LEDC_CHANNEL_0,
     .pixel_format = PIXFORMAT_JPEG,
-    .frame_size = FRAMESIZE_VGA,
+    .frame_size = FRAMESIZE_QVGA,
     .jpeg_quality = 12,
-    .fb_count = 1};
+    .fb_count = 2};
 
 // Глобальные переменные
 httpd_handle_t stream_httpd = NULL;
@@ -214,9 +215,9 @@ static esp_err_t websocket_handler(httpd_req_t *req) {
     ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
     if (ret == ESP_OK) {
       buf[ws_pkt.len] = '\0';
-      Serial.printf("WebSocket received: %s\n", buf);
+      Serial.printf("%s\n", buf);
 
-      if (strcmp((char *)buf, "toggle_flash") == 0) {
+      /* if (strcmp((char *)buf, "toggle_flash") == 0) {
         Serial.println("=== FLASH TOGGLE ===");
         toggle_flash();
         Serial.println("Time: " + String(millis()));
@@ -230,7 +231,7 @@ static esp_err_t websocket_handler(httpd_req_t *req) {
         resp_pkt.type = HTTPD_WS_TYPE_TEXT;
 
         httpd_ws_send_frame(req, &resp_pkt);
-      }
+      } */
     }
 
     free(buf);
@@ -317,6 +318,7 @@ static esp_err_t index_handler(httpd_req_t *req) {
         <!DOCTYPE html>
         <html>
         <head>
+            <meta charset="UTF-8">
             <title>Device Busy</title>
             <style>
                 body { font-family: Arial; text-align: center; margin: 50px; }
@@ -333,13 +335,38 @@ static esp_err_t index_handler(httpd_req_t *req) {
         )rawliteral";
 
     httpd_resp_set_type(req, "text/html");
+    httpd_resp_set_hdr(req, "Content-Type", "text/html; charset=utf-8");
     return httpd_resp_send(req, busy_page, strlen(busy_page));
   }
 
+  // Загружаем HTML из LittleFS
+  File file = LittleFS.open("/index.min.html", "r");
+  if (!file) {
+    Serial.println("Failed to open index.min.html from LittleFS");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+
+  // Устанавливаем правильные заголовки для UTF-8
   httpd_resp_set_type(req, "text/html");
-  String page = MAIN_page;
-  page.replace("IP_ADDRESS", WiFi.localIP().toString().c_str());
-  return httpd_resp_send(req, page.c_str(), page.length());
+  httpd_resp_set_hdr(req, "Content-Type", "text/html; charset=utf-8");
+
+  // Читаем и отправляем файл чанками
+  char chunk[512];
+  size_t chunksize;
+  do {
+    chunksize = file.readBytes(chunk, sizeof(chunk));
+    if (chunksize > 0) {
+      if (httpd_resp_send_chunk(req, chunk, chunksize) != ESP_OK) {
+        file.close();
+        return ESP_FAIL;
+      }
+    }
+  } while (chunksize > 0);
+
+  file.close();
+  httpd_resp_send_chunk(req, NULL, 0);
+  return ESP_OK;
 }
 
 // Запуск HTTP серверов
@@ -394,6 +421,12 @@ void setup() {
   Serial.setDebugOutput(true);
   Serial.println();
   Serial.println("=== ESP32-CAM with WebSocket Flash Control ===");
+
+  if (!LittleFS.begin(true)) {
+    Serial.println("LittleFS mount failed!");
+    return;
+  }
+  Serial.println("LittleFS mounted successfully");
 
   // Инициализация камеры
   if (init_camera() != ESP_OK) {
