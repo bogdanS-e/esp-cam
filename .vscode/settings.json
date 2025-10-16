@@ -2,5 +2,9 @@
   "files.associations": {
     "esp_timer.h": "c",
     "fb_gfx.h": "c"
-  }
+  },
+  "cSpell.words": [
+    "PIXFORMAT",
+    "pwdn"
+  ]
 }

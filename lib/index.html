@@ -373,16 +373,14 @@
 
         // Запускаем heartbeat
         heartbeatInterval = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send('ping');
-            missedPongs++;
+          ws.send('ping');
+          missedPongs++;
 
-            if (missedPongs >= maxMissedPongs) {
-              console.log('Too many missed pongs, reconnecting...');
-              ws.close();
-            }
+          if (missedPongs >= maxMissedPongs) {
+            console.log('Too many missed pongs, reconnecting...');
+            ws.close();
           }
-        }, 5000); // Пинг каждые 5 секунд
+        }, 1000); // Пинг каждые 1 секунду
       };
 
       ws.onmessage = function (event) {
