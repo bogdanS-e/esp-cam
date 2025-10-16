@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Device Busy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+      font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      /* для более чётких границ на Android */
+      -moz-osx-font-smoothing: grayscale;
+      /* для Firefox */
+      text-rendering: optimizeLegibility;
+      background-color: #121212;
+      color: #E0E0E0;
+      width: 100dvw;
+      height: 100vh;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      text-align: center;
+    }
+
+    img,
+    button {
+      border-radius: 8px;
+    }
+
+    img {
+      width: 100%;
+      max-width: 400px;
+    }
+
+    button {
+      background-color: #388E3C;
+      color: #fff;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      font-size: 2rem;
+      padding: 5px 10px;
+    }
+
+    button:focus,
+    button:focus-within {
+      border: none;
+      outline: none;
+    }
+
+    button:active,
+    button.active {
+      background-color: #2E7D32;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>🚫 Машинка занята</h1>
+  <p>Машинка в данный момент транслирует на другой клиент.</p>
+  <p>Попробуй позже.</p>
+  <button onclick="location.reload()">Повторить</button>
+  <img
+    src="https://res.cloudinary.com/dl6mqzurj/image/upload/v1760530163/video_2025-10-15_14-37-11-ezgif.com-crop_3_txq50s.gif"
+    alt="busy man">
+</body>
+
+</html>

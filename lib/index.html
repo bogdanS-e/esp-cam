@@ -16,23 +16,42 @@
     body {
       margin: 0;
       padding: 0;
-      height: 100%;
-      width: 100%;
-      overflow: hidden;
+      overflow: auto;
       font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
       /* для более чётких границ на Android */
       -moz-osx-font-smoothing: grayscale;
       /* для Firefox */
       text-rendering: optimizeLegibility;
-
       background-color: #121212;
       color: #E0E0E0;
-
-      display: flex;
-      flex-direction: column;
       width: 100dvw;
-      height: 100dvh;
+      height: 100vh;
+      position: relative;
+    }
+
+    button {
+      background-color: #388E3C;
+      border: none;
+      outline: none;
+      cursor: pointer;
+    }
+
+    button:focus,
+    button:focus-within {
+      border: none;
+      outline: none;
+    }
+
+    button:active,
+    button.active {
+      background-color: #2E7D32;
+    }
+
+    button:disabled {
+      background-color: #d3d3d3;
+      cursor: auto;
+      pointer-events: none;
     }
 
     #rotate-message {
@@ -42,7 +61,7 @@
       height: 100vh;
       top: 0;
       left: 0;
-      z-index: 1;
+      z-index: 3;
       background: inherit;
     }
 
@@ -89,6 +108,7 @@
       color: #fff;
       font-size: 0.75rem;
       position: fixed;
+      z-index: 1;
       top: 0;
       left: 0;
       width: 100vw;
@@ -107,14 +127,16 @@
     }
 
     #stream {
-      margin: 20px 10px;
       display: block;
       border-radius: 16px;
       width: 100%;
-      max-height: 60dvh;
+      max-height: 100vh;
       object-fit: contain;
       background: transparent;
-      flex: 1;
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
     }
 
     .joystick-wrapper {
@@ -123,7 +145,11 @@
       align-items: center;
       gap: 20px;
       padding: 10px 30px 20px;
-      flex-shrink: 0;
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      z-index: 2;
     }
 
     .joystick {
@@ -135,26 +161,27 @@
       gap: 3px;
       padding: 3px;
       box-shadow: 0 0 20px #388E3C;
+      transition: box-shadow 0.2s;
+    }
+
+    .joystick:has(button.active) {
+      box-shadow: 0 0 40px #388E3C;
     }
 
     .joystick button {
       border: none;
       cursor: pointer;
       color: #fff;
-      background-color: #388E3C;
       transition: transform 0.1s, background-color 0.2s;
     }
 
-    .joystick button:active {
-      transform: scale(0.95);
-      background-color: #2E7D32;
+    .joystick button:active,
+    .joystick button.active {
+      transform: scale(0.8);
     }
 
     .joystick button:disabled {
-      background-color: #d3d3d3;
       opacity: 0.4;
-      cursor: auto;
-      pointer-events: none;
     }
 
     .joystick svg {
@@ -179,12 +206,15 @@
     #right {
       border-radius: 0 130px 130px 0;
     }
+
     #left {
       border-radius: 200px 0 0 200px;
     }
+
     #forward {
       border-radius: 130px 130px 0 0;
     }
+
     #backward {
       border-radius: 0 0 130px 130px;
     }
@@ -192,11 +222,34 @@
     #forward svg {
       transform: rotate(-90deg);
     }
+
     #backward svg {
       transform: rotate(90deg);
     }
+
     #left svg {
       transform: rotate(-180deg);
+    }
+
+    #toggle_flash {
+      border-radius: 50%;
+      position: absolute;
+      bottom: 150px;
+      right: 30px;
+      padding: 15px;
+      font-size: 1.5rem;
+      z-index: 2;
+    }
+
+    #toggle_flash:active,
+    #toggle_flash.active {
+      background-color: #388E3C;
+    }
+
+    #toggle_flash.turned-off,
+    #toggle_flash.turned-off:active,
+    #toggle_flash.turned-off.active {
+      background-color: #616161;
     }
   </style>
 </head>
@@ -220,17 +273,17 @@
     🔴 Disconnected ❌
   </div>
 
-  <img id="stream" src="http://IP_ADDRESS:81/stream">
-
+  <img id="stream" src="#">
+  <button id="toggle_flash" class="turned-off controller">🔦</button>
   <div class="joystick-wrapper">
     <div class="joystick vertical">
-      <button class="movement-controller" id="forward">
+      <button class="controller movement-controller" id="forward">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 492.004 492.004">
           <path
             d="M382.678 226.804 163.73 7.86C158.666 2.792 151.906 0 144.698 0s-13.968 2.792-19.032 7.86l-16.124 16.12c-10.492 10.504-10.492 27.576 0 38.064L293.398 245.9l-184.06 184.06c-5.064 5.068-7.86 11.824-7.86 19.028 0 7.212 2.796 13.968 7.86 19.04l16.124 16.116c5.068 5.068 11.824 7.86 19.032 7.86s13.968-2.792 19.032-7.86L382.678 265c5.076-5.084 7.864-11.872 7.848-19.088.016-7.244-2.772-14.028-7.848-19.108z" />
         </svg>
       </button>
-      <button class="movement-controller" id="backward">
+      <button class="controller movement-controller" id="backward">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 492.004 492.004">
           <path
             d="M382.678 226.804 163.73 7.86C158.666 2.792 151.906 0 144.698 0s-13.968 2.792-19.032 7.86l-16.124 16.12c-10.492 10.504-10.492 27.576 0 38.064L293.398 245.9l-184.06 184.06c-5.064 5.068-7.86 11.824-7.86 19.028 0 7.212 2.796 13.968 7.86 19.04l16.124 16.116c5.068 5.068 11.824 7.86 19.032 7.86s13.968-2.792 19.032-7.86L382.678 265c5.076-5.084 7.864-11.872 7.848-19.088.016-7.244-2.772-14.028-7.848-19.108z" />
@@ -239,13 +292,13 @@
     </div>
 
     <div class="joystick horizontal">
-      <button class="movement-controller" id="left">
+      <button class="controller movement-controller" id="left">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 492.004 492.004">
           <path
             d="M382.678 226.804 163.73 7.86C158.666 2.792 151.906 0 144.698 0s-13.968 2.792-19.032 7.86l-16.124 16.12c-10.492 10.504-10.492 27.576 0 38.064L293.398 245.9l-184.06 184.06c-5.064 5.068-7.86 11.824-7.86 19.028 0 7.212 2.796 13.968 7.86 19.04l16.124 16.116c5.068 5.068 11.824 7.86 19.032 7.86s13.968-2.792 19.032-7.86L382.678 265c5.076-5.084 7.864-11.872 7.848-19.088.016-7.244-2.772-14.028-7.848-19.108z" />
         </svg>
       </button>
-      <button class="movement-controller" id="right">
+      <button class="controller movement-controller" id="right">
         <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" wx="0" y="0"
           viewBox="0 0 492.004 492.004">
           <g>
@@ -262,6 +315,7 @@
     var ws = null;
     var currentUrl = window.location.hostname;
     var statusElement = document.getElementById('status');
+    var flashButton = document.getElementById("toggle_flash");
 
     function handleRotationScreen(params) {
       function checkOrientation() {
@@ -300,36 +354,68 @@
 
 
     function changeControls(disable) {
-      //document.querySelectorAll('.movement-controller').forEach(btn => btn.disabled = disable);
+      //document.querySelectorAll('.controller').forEach(btn => btn.disabled = disable);
     }
 
-    function connectWebSocket() {
+    function handleWebSocket() {
       if (ws && ws.readyState === WebSocket.OPEN) return;
 
       ws = new WebSocket(`ws://${currentUrl}/ws`);
+
+      let heartbeatInterval;
+      let missedPongs = 0;
+      const maxMissedPongs = 3;
 
       ws.onopen = function () {
         console.log('WebSocket connected');
         showStatus(true);
         changeControls(false);
+
+        // Запускаем heartbeat
+        heartbeatInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send('ping');
+            missedPongs++;
+
+            if (missedPongs >= maxMissedPongs) {
+              console.log('Too many missed pongs, reconnecting...');
+              ws.close();
+            }
+          }
+        }, 5000); // Пинг каждые 5 секунд
       };
 
       ws.onmessage = function (event) {
         console.log('Received:', event.data);
-        statusElement.textContent = 'Server: ' + event.data;
+
+        if (event.data === 'pong') {
+          missedPongs = 0; // Сброс счетчика
+          return;
+        }
+
+        if (event.data.startsWith("Flash-")) {
+          const state = event.data.split("-")[1];
+
+          if (state === "ON") {
+            flashButton.classList.remove("turned-off");
+          } else if (state === "OFF") {
+            flashButton.classList.add("turned-off");
+          }
+        }
       };
 
       ws.onclose = function () {
         console.log('WebSocket disconnected');
         showStatus(false);
         changeControls(true);
-        setTimeout(connectWebSocket, 2000);
+        clearInterval(heartbeatInterval);
+        setTimeout(handleWebSocket, 2000);
       };
 
       ws.onerror = function (error) {
         console.log('WebSocket error:', error);
+        clearInterval(heartbeatInterval);
       };
-
     }
 
     function sendData(data) {
@@ -342,82 +428,127 @@
 
     function handleMovement() {
       const DATA_SEND_INTERVAL = 100;
-      const controllersElements = document.querySelectorAll('.movement-controller');
+      const controllers = document.querySelectorAll('.movement-controller');
       const intervals = {};
+      const activeKeys = new Set();
 
-      const activeKeys = new Set(); // активные направления (forward, backward, left, right)
+      function startAction(elementId) {
+        if (intervals[elementId]) return;
 
-      const startAction = function (movementDirection) {
-        if (intervals[movementDirection]) return; // уже запущено
+        activeKeys.add(elementId);
 
-        activeKeys.add(movementDirection);
-        logDirection();
+        const activeElement = document.getElementById(elementId);
 
-        intervals[movementDirection] = setTimeout(function run() {
-          logDirection();
-          intervals[movementDirection] = setTimeout(run, DATA_SEND_INTERVAL);
+        if (activeElement) {
+          activeElement.classList.add("active");
+        }
+
+        handleDirection();
+
+        intervals[elementId] = setTimeout(function repeat() {
+          handleDirection();
+          intervals[elementId] = setTimeout(repeat, DATA_SEND_INTERVAL);
         }, DATA_SEND_INTERVAL);
-      };
-
-      const stopAction = function (movementDirection) {
-        if (!intervals[movementDirection]) return;
-
-        clearTimeout(intervals[movementDirection]);
-
-        delete intervals[movementDirection];
-        activeKeys.delete(movementDirection);
-
-        logDirection(); // пересчитать направление при отпускании
-      };
-
-      function logDirection() {
-        var directions = Array.from(activeKeys);
-        var output = "";
-        console.log('logDirection:', directions);
-
-        // Если нажата только одна кнопка — просто её id
-        if (directions.length === 1) {
-          output = directions[0];
-        }
-
-        // Если две — ищем комбинацию “одна с оси движения” + “одна с оси поворота”
-        else if (directions.length === 2) {
-          const xDirection = directions.find(direction => direction === "forward" || direction === "backward");
-          const yDirection = directions.find(direction => direction === "left" || direction === "right");
-
-          if (xDirection && yDirection) output = `${xDirection}-${yDirection}`;
-        }
-
-        if (output) sendData(output);
-        else sendData("stop");
       }
 
-      // === МЫШЬ / ТАЧ ===
-      controllersElements.forEach(element => {
-        element.addEventListener("mousedown", () => startAction(element.id));
-        element.addEventListener("mouseup", () => stopAction(element.id));
-        element.addEventListener("mouseleave", () => stopAction(element.id));
+      function stopAction(elementId) {
+        if (!intervals[elementId]) {
+          return;
+        }
 
-        element.addEventListener("touchstart", () => startAction(element.id));
-        element.addEventListener("touchend", () => stopAction(element.id));
-        element.addEventListener("touchcancel", () => stopAction(element.id));
+        activeKeys.delete(elementId);
+
+        const activeElement = document.getElementById(elementId);
+
+        if (activeElement) {
+          activeElement.classList.remove("active");
+        }
+
+        clearTimeout(intervals[elementId]);
+        delete intervals[elementId];
+
+        handleDirection();
+      }
+
+      function handleDirection() {
+        const dirs = Array.from(activeKeys);
+        let output = "";
+
+        if (dirs.length === 1) {
+          output = dirs[0];
+        } else if (dirs.length === 2) {
+          const x = dirs.find(d => d === "forward" || d === "backward");
+          const y = dirs.find(d => d === "left" || d === "right");
+
+          if (x && y) output = `${x}-${y}`;
+        }
+
+        if (output) {
+          sendData(output);
+
+          return
+        }
+
+        sendData("stop");
+      }
+
+      // mouse
+      controllers.forEach(elementId => {
+        elementId.addEventListener("mousedown", () => startAction(elementId.id));
+        elementId.addEventListener("mouseup", () => stopAction(elementId.id));
+        elementId.addEventListener("mouseleave", () => stopAction(elementId.id));
       });
 
-      // === КЛАВИАТУРА ===
-      const keyMap = {
-        w: "forward",
-        s: "backward",
-        a: "left",
-        d: "right"
-      };
-
-      document.addEventListener("keydown", function (e) {
-        const id = keyMap[e.key.toLowerCase()];
-        if (id) startAction(id);
+      // keyboard
+      const keyMap = { w: "forward", s: "backward", a: "left", d: "right" };
+      document.addEventListener("keydown", e => {
+        const elementId = keyMap[e.key.toLowerCase()];
+        if (elementId) startAction(elementId);
       });
-      document.addEventListener("keyup", function (e) {
-        const id = keyMap[e.key.toLowerCase()];
-        if (id) stopAction(id);
+      document.addEventListener("keyup", e => {
+        const elementId = keyMap[e.key.toLowerCase()];
+        if (elementId) stopAction(elementId);
+      });
+
+      // multitouch
+      const joystickWrapper = document.querySelector(".joystick-wrapper");
+      joystickWrapper.addEventListener("touchstart", e => {
+        e.preventDefault();
+
+        for (const { target } of e.changedTouches) {
+          const controller = target.closest(".movement-controller");
+
+          if (controller) {
+            startAction(controller.id);
+          }
+        }
+      });
+      joystickWrapper.addEventListener("touchend", e => {
+        e.preventDefault();
+        for (const { target } of e.changedTouches) {
+          const controller = target.closest(".movement-controller");
+
+          if (controller) {
+            stopAction(controller.id);
+          }
+        }
+      });
+      joystickWrapper.addEventListener("touchcancel", e => {
+        e.preventDefault();
+        for (const { target } of e.changedTouches) {
+          const controller = target.closest(".movement-controller");
+
+          if (controller) {
+            stopAction(controller.id);
+          }
+        }
+      });
+    }
+
+    function handleFunctions() {
+
+      flashButton.addEventListener("click", function () {
+        sendData("toggle_flash");
       });
     }
 
@@ -430,9 +561,10 @@
     document.addEventListener("DOMContentLoaded", function () {
       changeControls(true);
       handleRotationScreen();
-      connectWebSocket();
+      handleWebSocket();
       handleMovement();
       startStreaming();
+      handleFunctions();
     });
   </script>
 </body>

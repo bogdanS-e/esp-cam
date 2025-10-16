@@ -63,99 +63,6 @@ static bool client_active = false;
 static bool flash_state = false;
 #define FLASH_GPIO_NUM 4
 
-// HTML страница
-static const char *MAIN_page = R"rawliteral(
-<!DOCTYPE html>
-<html>
-<head>
-    <title>ESP32-CAM Stream</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: Arial; text-align: center; margin: 20px; }
-        button { 
-            padding: 20px 40px; 
-            font-size: 20px; 
-            background: #4CAF50; 
-            color: white; 
-            border: none; 
-            border-radius: 8px; 
-            cursor: pointer;
-            margin: 10px;
-        }
-        button:active { background: #45a049; transform: scale(0.98); }
-        .status { margin: 15px; padding: 10px; border-radius: 5px; }
-        .connected { background: #d4edda; color: #155724; }
-        .disconnected { background: #f8d7da; color: #721c24; }
-        img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 5px; }
-    </style>
-</head>
-<body>
-    <h1>ESP32-CAM Stream</h1>
-    
-    <div class="status disconnected" id="status">
-        Disconnected - Click to connect
-    </div>
-    
-    <img src="http://IP_ADDRESS:81/stream">
-    
-    <br>
-    
-    <button onclick="sendFlashToggle()" id="mainButton" disabled>
-        🔦 Toggle Flash
-    </button>
-
-    <script>
-        var ws = null;
-        var currentUrl = window.location.hostname;
-        
-        // Автоподстановка IP для видео
-        document.querySelector('img').src = 'http://' + currentUrl + ':81/stream';
-        
-        function connectWebSocket() {
-            if (ws && ws.readyState === WebSocket.OPEN) return;
-            
-            ws = new WebSocket('ws://' + currentUrl + '/ws');
-            
-            ws.onopen = function() {
-                console.log('WebSocket connected');
-                document.getElementById('status').className = 'status connected';
-                document.getElementById('status').textContent = 'Connected ✅';
-                document.getElementById('mainButton').disabled = false;
-            };
-            
-            ws.onmessage = function(event) {
-                console.log('Received:', event.data);
-                document.getElementById('status').textContent = 'Server: ' + event.data;
-            };
-            
-            ws.onclose = function() {
-                console.log('WebSocket disconnected');
-                document.getElementById('status').className = 'status disconnected';
-                document.getElementById('status').textContent = 'Disconnected - Click to reconnect';
-                document.getElementById('mainButton').disabled = true;
-                setTimeout(connectWebSocket, 2000);
-            };
-            
-            ws.onerror = function(error) {
-                console.log('WebSocket error:', error);
-            };
-        }
-        
-        function sendFlashToggle() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send('toggle_flash');
-                document.getElementById('status').textContent = 'Toggling flash...';
-            }
-        }
-        
-        // Автоподключение при загрузке
-        document.getElementById('status').onclick = connectWebSocket;
-        connectWebSocket();
-    </script>
-</body>
-</html>
-)rawliteral";
-
 // Функция инициализации камеры
 esp_err_t init_camera() {
   esp_err_t err = esp_camera_init(&camera_config);
@@ -184,6 +91,16 @@ void toggle_flash() {
 static esp_err_t websocket_handler(httpd_req_t *req) {
   if (req->method == HTTP_GET) {
     Serial.println("WebSocket connection requested");
+
+    // 🔥 Отправляем состояние вспышки сразу при подключении
+    const char *response = flash_state ? "Flash-ON" : "Flash-OFF";
+    httpd_ws_frame_t resp_pkt;
+    resp_pkt.payload = (uint8_t *)response;
+    resp_pkt.len = strlen(response);
+    resp_pkt.type = HTTPD_WS_TYPE_TEXT;
+    httpd_ws_send_frame(req, &resp_pkt);
+
+    Serial.printf("Sent initial flash state: %s\n", response);
     return ESP_OK;
   }
 
@@ -215,23 +132,30 @@ static esp_err_t websocket_handler(httpd_req_t *req) {
     ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
     if (ret == ESP_OK) {
       buf[ws_pkt.len] = '\0';
-      Serial.printf("%s\n", buf);
+      Serial.printf("Received: %s\n", buf);
 
-      /* if (strcmp((char *)buf, "toggle_flash") == 0) {
-        Serial.println("=== FLASH TOGGLE ===");
+      if (strcmp((char *)buf, "toggle_flash") == 0) {
         toggle_flash();
-        Serial.println("Time: " + String(millis()));
-        Serial.println("=== ============= ===");
 
         // Send response back
-        const char *response = "Flash toggled!";
+        const char *response = flash_state ? "Flash-ON" : "Flash-OFF";
         httpd_ws_frame_t resp_pkt;
         resp_pkt.payload = (uint8_t *)response;
         resp_pkt.len = strlen(response);
         resp_pkt.type = HTTPD_WS_TYPE_TEXT;
 
         httpd_ws_send_frame(req, &resp_pkt);
-      } */
+      }
+
+      if (strcmp((char *)buf, "ping") == 0) {
+        const char *response = "pong";
+        httpd_ws_frame_t resp_pkt;
+        resp_pkt.payload = (uint8_t *)response;
+        resp_pkt.len = strlen(response);
+        resp_pkt.type = HTTPD_WS_TYPE_TEXT;
+        httpd_ws_send_frame(req, &resp_pkt);
+        Serial.println("Ping received, sent pong");
+      }
     }
 
     free(buf);
@@ -314,29 +238,34 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 static esp_err_t index_handler(httpd_req_t *req) {
   // Блокируем доступ если уже есть клиент со стримом
   if (client_active) {
-    const char *busy_page = R"rawliteral(
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Device Busy</title>
-            <style>
-                body { font-family: Arial; text-align: center; margin: 50px; }
-                h1 { color: #f44336; }
-            </style>
-        </head>
-        <body>
-            <h1>🚫 Device Busy</h1>
-            <p>Device is currently streaming to another client.</p>
-            <p>Please try again later.</p>
-            <button onclick="location.reload()">Retry</button>
-        </body>
-        </html>
-        )rawliteral";
+    // Загружаем HTML из LittleFS
+    File file = LittleFS.open("/busy.min.html", "r");
+    if (!file) {
+      Serial.println("Failed to open busy.min.html from LittleFS");
+      httpd_resp_send_500(req);
+      return ESP_FAIL;
+    }
 
+    // Устанавливаем правильные заголовки для UTF-8
     httpd_resp_set_type(req, "text/html");
     httpd_resp_set_hdr(req, "Content-Type", "text/html; charset=utf-8");
-    return httpd_resp_send(req, busy_page, strlen(busy_page));
+
+    // Читаем и отправляем файл чанками
+    char chunk[512];
+    size_t chunksize;
+    do {
+      chunksize = file.readBytes(chunk, sizeof(chunk));
+      if (chunksize > 0) {
+        if (httpd_resp_send_chunk(req, chunk, chunksize) != ESP_OK) {
+          file.close();
+          return ESP_FAIL;
+        }
+      }
+    } while (chunksize > 0);
+
+    file.close();
+    httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;
   }
 
   // Загружаем HTML из LittleFS
