@@ -40,6 +40,16 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
     return;
   }
 
+  if (strncmp(command, "cameraDrag_", 11) == 0) {
+    int x, y;
+
+    if (sscanf(command + 11, "%d_%d", &x, &y) == 2) {
+      car.setCameraX(x);
+    }
+    
+    return;
+  }
+
   if (strcmp(command, "ping") == 0) {
     sendResponse(req, "pong");
 

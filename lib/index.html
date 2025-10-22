@@ -657,6 +657,8 @@
         rangeX.style.opacity = RANGE_OPACITY;
         rangeY.style.opacity = RANGE_OPACITY;
 
+        sendData(`cameraDrag_${drag.x}_${drag.y}`);
+
         clearTimeout(timeout);
         timeout = setTimeout(() => {
           rangeX.style.opacity = '';
@@ -667,6 +669,8 @@
       resetButton.addEventListener('click', () => onDragChange(0, 0));
 
       dragArea.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+
         isDragging = true;
         startX = e.clientX;
         startY = e.clientY;

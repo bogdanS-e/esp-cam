@@ -2,8 +2,8 @@
 #define CAR_H
 
 #include "esp_camera.h"
+#include <ESP32Servo.h>
 
-// AI-Thinker cam config
 #define CAMERA_MODEL_AI_THINKER
 #define PWDN_GPIO_NUM 32
 #define RESET_GPIO_NUM -1
@@ -21,9 +21,10 @@
 #define VSYNC_GPIO_NUM 25
 #define HREF_GPIO_NUM 23
 #define PCLK_GPIO_NUM 22
+
+#define SERVO_PIN 2
 #define FLASH_PIN 4
 
-// Настройки камеры
 static camera_config_t camera_config = {
     .pin_pwdn = PWDN_GPIO_NUM,
     .pin_reset = RESET_GPIO_NUM,
@@ -51,13 +52,15 @@ static camera_config_t camera_config = {
 
 class Car {
 public:
-  Car() {
-    flashState = false;
-  }
+  Car() : flashState(false), currentAngle(90), targetAngle(90), lastUpdate(0) {}
 
   esp_err_t init() {
     pinMode(FLASH_PIN, OUTPUT);
     digitalWrite(FLASH_PIN, LOW);
+
+    servoX.attach(SERVO_PIN);
+    servoX.write(90);
+
     return initCamera();
   }
 
@@ -87,9 +90,7 @@ public:
     Serial.printf("Flash toggled to %s\n", flashState ? "ON" : "OFF");
   }
 
-  bool getFlashState() const {
-    return flashState;
-  }
+  bool getFlashState() const { return flashState; }
 
   void moveForward() { Serial.println("Forward"); }
   void moveBackward() { Serial.println("Backward"); }
@@ -97,19 +98,52 @@ public:
   void turnRight() { Serial.println("Right"); }
   void stop() { Serial.println("Stop"); }
 
+  void setCameraX(int x) {
+    x = constrain(x, -100, 100);
+    targetAngle = map(x, -100, 100, 0, 180);
+    Serial.printf("Target camera angle: %d\n", targetAngle);
+  }
+
+  void updateServo() {
+    unsigned long now = millis();
+    const int stepDelay = 5;
+    if (now - lastUpdate < stepDelay)
+      return;
+    lastUpdate = now;
+
+    if (currentAngle == targetAngle)
+      return;
+
+    int diff = targetAngle - currentAngle;
+
+    int step = constrain(abs(diff) / 4 + 1, 1, 8);
+    if (diff > 0)
+      currentAngle += step;
+    else
+      currentAngle -= step;
+
+    if ((diff > 0 && currentAngle > targetAngle) ||
+        (diff < 0 && currentAngle < targetAngle))
+      currentAngle = targetAngle;
+
+    servoX.write(currentAngle);
+  }
+
 private:
   bool flashState;
+  Servo servoX;
+
+  int currentAngle;
+  int targetAngle;
+  unsigned long lastUpdate;
 
   esp_err_t initCamera() {
     esp_err_t err = esp_camera_init(&camera_config);
-
     if (err != ESP_OK) {
       Serial.printf("Camera error: 0x%x\n", err);
       return err;
     }
-
     Serial.println("Camera initialized");
-
     return ESP_OK;
   }
 };
