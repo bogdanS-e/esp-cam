@@ -1,6 +1,7 @@
 #ifndef CAR_H
 #define CAR_H
 
+#include "Motor.h"
 #include "esp_camera.h"
 #include <ESP32Servo.h>
 
@@ -24,6 +25,17 @@
 
 #define SERVO_PIN 2
 #define FLASH_PIN 4
+
+// pins
+#define RIGHT_MOTOR_PWM_1 12
+#define RIGHT_MOTOR_PWM_2 13
+#define RIGHT_MOTOR_CHANNEL_1 2
+#define RIGHT_MOTOR_CHANNEL_2 4
+
+#define LEFT_MOTOR_PWM_1 14
+#define LEFT_MOTOR_PWM_2 15
+#define LEFT_MOTOR_CHANNEL_1 3
+#define LEFT_MOTOR_CHANNEL_2 5
 
 static camera_config_t camera_config = {
     .pin_pwdn = PWDN_GPIO_NUM,
@@ -52,11 +64,18 @@ static camera_config_t camera_config = {
 
 class Car {
 public:
-  Car() : flashState(false), currentAngle(90), targetAngle(90), lastUpdate(0) {}
+  Car() : flashState(false),
+          currentAngle(90),
+          targetAngle(90),
+          lastUpdate(0),
+          motorL(LEFT_MOTOR_PWM_1, LEFT_MOTOR_PWM_2, LEFT_MOTOR_CHANNEL_1, LEFT_MOTOR_CHANNEL_2),
+          motorR(RIGHT_MOTOR_PWM_1, RIGHT_MOTOR_PWM_2, RIGHT_MOTOR_CHANNEL_1, RIGHT_MOTOR_CHANNEL_2) {}
 
   esp_err_t init() {
     pinMode(FLASH_PIN, OUTPUT);
     digitalWrite(FLASH_PIN, LOW);
+
+    initMotors();
 
     servoX.attach(SERVO_PIN);
     servoX.write(90);
@@ -66,37 +85,56 @@ public:
 
   void capturePhoto() {
     camera_fb_t *fb = esp_camera_fb_get();
+
     if (!fb) {
       Serial.println("Camera capture failed");
       return;
     }
+
     Serial.printf("Captured %d bytes\n", fb->len);
     esp_camera_fb_return(fb);
   }
 
   void turnOnFlash() {
     digitalWrite(FLASH_PIN, HIGH);
+    motorMax = 250;
     flashState = true;
   }
 
   void turnOffFlash() {
     digitalWrite(FLASH_PIN, LOW);
+    motorMax = 200;
     flashState = false;
   }
 
   void toggleFlash() {
     flashState = !flashState;
     digitalWrite(FLASH_PIN, flashState ? HIGH : LOW);
+    motorMax = flashState ? 200 : 255; // TODO remove it
+
     Serial.printf("Flash toggled to %s\n", flashState ? "ON" : "OFF");
   }
 
   bool getFlashState() const { return flashState; }
 
-  void moveForward() { Serial.println("Forward"); }
-  void moveBackward() { Serial.println("Backward"); }
+  void moveForward() {
+    motorL.moveForward(motorMax);
+    motorR.moveForward(motorMax);
+  }
+
+  void moveBackward() {
+    motorL.moveBackward(motorMax);
+    motorR.moveBackward(motorMax);
+  }
+
   void turnLeft() { Serial.println("Left"); }
   void turnRight() { Serial.println("Right"); }
-  void stop() { Serial.println("Stop"); }
+  
+  void stop() {
+    Serial.println("Stop");
+    motorL.stop();
+    motorR.stop();
+  }
 
   void setCameraX(int x) {
     x = constrain(x, -100, 100);
@@ -137,15 +175,65 @@ private:
   int targetAngle;
   unsigned long lastUpdate;
 
+  uint8_t motorMax = 255;
+  Motor motorL;
+  Motor motorR;
+
   esp_err_t initCamera() {
     esp_err_t err = esp_camera_init(&camera_config);
+
     if (err != ESP_OK) {
       Serial.printf("Camera error: 0x%x\n", err);
       return err;
     }
+
     Serial.println("Camera initialized");
     return ESP_OK;
   }
+
+  void initMotors() {
+    motorL.begin();
+    motorR.begin();
+  }
+
+  /* void processCommand(const char *command) {
+    if (strcmp(command, "forward") == 0) {
+      motorL.setSpeedPerc(motorMax);
+      motorR.setSpeedPerc(motorMax);
+    } else if (strcmp(command, "backward") == 0) {
+      motorL.setSpeedPerc(-motorMax);
+      motorR.setSpeedPerc(-motorMax);
+    } else if (strcmp(command, "right") == 0) {
+      motorL.setSpeedPerc(motorMax / 2);
+      motorR.setSpeedPerc(-motorMax / 2);
+    } else if (strcmp(command, "left") == 0) {
+      motorL.setSpeedPerc(-motorMax / 2);
+      motorR.setSpeedPerc(motorMax / 2);
+    } else if (strcmp(command, "G") == 0) { // Forward left
+      motorL.setSpeedPerc(motorMax / 4);
+      motorR.setSpeedPerc(motorMax);
+    } else if (strcmp(command, "H") == 0) { // Forward right
+      motorL.setSpeedPerc(motorMax);
+      motorR.setSpeedPerc(motorMax / 4);
+    } else if (strcmp(command, "I") == 0) { // Backward left
+      motorL.setSpeedPerc(-motorMax / 4);
+      motorR.setSpeedPerc(-motorMax);
+    } else if (strcmp(command, "J") == 0) { // Backward right
+      motorR.setSpeedPerc(-motorMax / 4);
+      motorL.setSpeedPerc(-motorMax);
+    } else if (strcmp(command, "stop") == 0) {
+      motorL.stop();
+      motorR.stop();
+    } else if (strcmp(command, "1") == 0) {
+      motorMax = 50;
+    } else if (strcmp(command, "2") == 0) {
+      motorMax = 70;
+    } else if (strcmp(command, "3") == 0) {
+      motorMax = 80;
+    } else if (strcmp(command, "4") == 0) {
+      motorMax = 100;
+    }
+  } */
 };
 
 #endif // CAR_H

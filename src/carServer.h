@@ -57,11 +57,13 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
   }
 
   if (strcmp(command, "forward") == 0) {
+    car.moveForward();
 
     return;
   }
 
   if (strcmp(command, "backward") == 0) {
+    car.moveBackward();
 
     return;
   }
@@ -97,7 +99,8 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
   }
 
   if (strcmp(command, "stop") == 0) {
-
+    car.stop();
+    
     return;
   }
 
