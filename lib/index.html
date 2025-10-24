@@ -238,7 +238,6 @@
       padding: 15px;
       font-size: 1.5rem;
       z-index: 2;
-      position: absolute;
       border-radius: 50%;
       width: 62px;
       height: 62px;
@@ -248,24 +247,55 @@
       color: inherit;
     }
 
+    #wifiIndicator {
+      position: absolute;
+      top: 50px;
+      left: 30px;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 4px;
+      padding: 5px 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #wifiIndicator svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    #wifiIndicator.good path:first-child {
+      opacity: 0;
+    }
+
+    #wifiIndicator.weak path:first-child,
+    #wifiIndicator.weak path:nth-child(2){
+      opacity: 0;
+    }
+
+    #wifiIndicator.poor path:last-child {
+      fill: red;
+    }
+
     #resetCamera {
       top: 50px;
       right: 30px;
     }
 
-    #toggle_flash {
+    #toggleFlash {
       bottom: 150px;
       right: 30px;
     }
 
-    #toggle_flash:active,
-    #toggle_flash.active {
+    #toggleFlash:active,
+    #toggleFlash.active {
       background-color: #388E3C;
     }
 
-    #toggle_flash.turned-off,
-    #toggle_flash.turned-off:active,
-    #toggle_flash.turned-off.active {
+    #toggleFlash.turned-off,
+    #toggleFlash.turned-off:active,
+    #toggleFlash.turned-off.active {
       background-color: #616161;
     }
 
@@ -337,8 +367,23 @@
   </div>
 
   <img id="stream" src="#">
+  <span id="wifiIndicator" class="weak poor">
+    <svg xmlns="http://www.w3.org/2000/svg"  xmlns:xlink="http://www.w3.org/1999/xlink"" x=" 0" y="0"
+      viewBox="0 0 24 24">
+      <path
+        d="M21.484 10.027C16.45 5.256 8.698 5.005 3.378 9.274c-.295.237-.583.488-.862.753a.75.75 0 0 1-1.032-1.089c.31-.293.628-.57.955-.833 5.9-4.736 14.494-4.458 20.077.833a.75.75 0 0 1-1.032 1.089z"
+        fill="#fff"></path>
+      <path
+        d="M4.47 12.37c4.159-4.16 10.901-4.16 15.06 0a.75.75 0 0 1-1.06 1.06 9.15 9.15 0 0 0-12.94 0 .75.75 0 1 1-1.06-1.06z"
+        fill="#fff"></path>
+      <path
+        d="M7.47 15.627a6.407 6.407 0 0 1 9.06 0 .75.75 0 0 1-1.06 1.06 4.907 4.907 0 0 0-6.94 0 .75.75 0 1 1-1.06-1.06zM12 20a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5z"
+        fill="#fff"></path>
+    </svg>
+    <span id="rssiValue"></span>
+  </span>
   <button id="resetCamera" class="controller function-button">↻</button>
-  <button id="toggle_flash" class="turned-off controller function-button">🔦</button>
+  <button id="toggleFlash" class="turned-off controller function-button">🔦</button>
   <div class="joystick-wrapper">
     <div class="joystick vertical">
       <button class="controller movement-controller" id="forward">
@@ -388,7 +433,7 @@
     var ws = null;
     var currentUrl = window.location.hostname;
     var statusElement = document.getElementById('status');
-    var flashButton = document.getElementById("toggle_flash");
+    var flashButton = document.getElementById("toggleFlash");
 
     function handleRotationScreen(params) {
       function checkOrientation() {
@@ -425,6 +470,23 @@
       statusElement.classList.add("disconnected");
     }
 
+    function updateWiFiIndicator(rssi) {
+      const indicator = document.getElementById('wifiIndicator');
+      const rssiValue = document.getElementById('rssiValue');
+
+      if (rssi <= 55) {
+        indicator.className = 'excellent';
+      } else if (rssi <= 75) {
+        indicator.className = 'good';
+      } else if (rssi <= 85) {
+        indicator.className = 'weak';
+      } else {
+        indicator.className = 'weak poor';
+      }
+
+      rssiValue.textContent = `-${rssi}dBm`;
+    }
+
 
     function changeControls(disable) {
       //document.querySelectorAll('.controller').forEach(btn => btn.disabled = disable);
@@ -437,14 +499,13 @@
 
       let heartbeatInterval;
       let missedPongs = 0;
-      const maxMissedPongs = 3;
+      const maxMissedPongs = 2;
 
       ws.onopen = function () {
         console.log('WebSocket connected');
         showStatus(true);
         changeControls(false);
 
-        // Запускаем heartbeat
         heartbeatInterval = setInterval(() => {
           ws.send('ping');
           missedPongs++;
@@ -452,15 +513,22 @@
           if (missedPongs >= maxMissedPongs) {
             console.log('Too many missed pongs, reconnecting...');
             ws.close();
+            ws.onclose();
           }
-        }, 1000); // Пинг каждые 1 секунду
+        }, 2000);
       };
 
       ws.onmessage = function (event) {
         console.log('Received:', event.data);
 
-        if (event.data === 'pong') {
-          missedPongs = 0; // Сброс счетчика
+        if (event.data.startsWith("pong-")) {
+          missedPongs = 0;
+
+          const rssi = parseInt(event.data.split("-")[1]);
+
+          updateWiFiIndicator(rssi);
+          console.log(`WiFi signal: ${rssi} dBm`);
+
           return;
         }
 
@@ -617,9 +685,8 @@
     }
 
     function handleFunctions() {
-
       flashButton.addEventListener("click", function () {
-        sendData("toggle_flash");
+        sendData("toggleFlash");
       });
     }
 

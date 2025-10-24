@@ -31,7 +31,7 @@ void sendResponse(httpd_req_t *req, const char *message) {
 void handleCarCommand(const char *command, httpd_req_t *req) {
   Serial.printf("Command handler received: %s\n", command);
 
-  if (strcmp(command, "toggle_flash") == 0) {
+  if (strcmp(command, "toggleFlash") == 0) {
     car.toggleFlash();
 
     const char *response = car.getFlashState() ? "Flash-ON" : "Flash-OFF";
@@ -46,12 +46,17 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
     if (sscanf(command + 11, "%d_%d", &x, &y) == 2) {
       car.setCameraX(x);
     }
-    
+
     return;
   }
 
   if (strcmp(command, "ping") == 0) {
-    sendResponse(req, "pong");
+    int rssi = WiFi.RSSI();
+
+    char response[32];
+
+    snprintf(response, sizeof(response), "pong-%d", abs(rssi));
+    sendResponse(req, response);
 
     return;
   }
@@ -100,91 +105,12 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
 
   if (strcmp(command, "stop") == 0) {
     car.stop();
-    
+
     return;
   }
 
   Serial.printf("Unknown command: %s\n", command);
 }
-
-/* static esp_err_t websocketHandler(httpd_req_t *req) {
-  if (req->method == HTTP_GET) {
-    Serial.println("WebSocket connection requested");
-
-    const char *message = car.getFlashState() ? "Flash-ON" : "Flash-OFF";
-    httpd_ws_frame_t res;
-    res.payload = (uint8_t *)message;
-    res.len = strlen(message);
-    res.type = HTTPD_WS_TYPE_TEXT;
-    httpd_ws_send_frame(req, &res);
-
-    Serial.printf("Sent initial flash state: %s\n", message);
-    return ESP_OK;
-  }
-
-  // WebSocket frame structure
-  httpd_ws_frame_t wsFrame;
-  uint8_t *buffer = NULL;
-
-  memset(&wsFrame, 0, sizeof(httpd_ws_frame_t));
-  wsFrame.type = HTTPD_WS_TYPE_TEXT;
-
-  // get data length
-  esp_err_t ret = httpd_ws_recv_frame(req, &wsFrame, 0);
-  if (ret != ESP_OK) {
-    Serial.println("Failed to get frame length");
-
-    return ret;
-  }
-
-  if (wsFrame.len) {
-    // Allocate a data buffer
-    buffer = (uint8_t *)calloc(1, wsFrame.len + 1);
-
-    if (buffer == NULL) {
-      Serial.println("Failed to allocate memory");
-
-      return ESP_ERR_NO_MEM;
-    }
-
-    wsFrame.payload = buffer;
-
-    // Get data
-    ret = httpd_ws_recv_frame(req, &wsFrame, wsFrame.len);
-
-    if (ret == ESP_OK) {
-      buffer[wsFrame.len] = '\0';
-      Serial.printf("Received: %s\n", buffer);
-
-      if (strcmp((char *)buffer, "toggle_flash") == 0) {
-        car.toggleFlash();
-
-        // Send response back
-        const char *response = car.getFlashState() ? "Flash-ON" : "Flash-OFF";
-        httpd_ws_frame_t resp_pkt;
-        resp_pkt.payload = (uint8_t *)response;
-        resp_pkt.len = strlen(response);
-        resp_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-        httpd_ws_send_frame(req, &resp_pkt);
-      }
-
-      if (strcmp((char *)buffer, "ping") == 0) {
-        const char *response = "pong";
-        httpd_ws_frame_t resp_pkt;
-        resp_pkt.payload = (uint8_t *)response;
-        resp_pkt.len = strlen(response);
-        resp_pkt.type = HTTPD_WS_TYPE_TEXT;
-        httpd_ws_send_frame(req, &resp_pkt);
-        Serial.println("Ping received, sent pong");
-      }
-    }
-
-    free(buffer);
-  }
-
-  return ESP_OK;
-} */
 
 static esp_err_t websocketHandler(httpd_req_t *req) {
   if (req->method == HTTP_GET) {
