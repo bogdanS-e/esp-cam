@@ -234,10 +234,8 @@
 
     .function-button {
       border-radius: 50%;
-      position: absolute;
       padding: 15px;
       font-size: 1.5rem;
-      z-index: 2;
       border-radius: 50%;
       width: 62px;
       height: 62px;
@@ -270,7 +268,7 @@
     }
 
     #wifiIndicator.weak path:first-child,
-    #wifiIndicator.weak path:nth-child(2){
+    #wifiIndicator.weak path:nth-child(2) {
       opacity: 0;
     }
 
@@ -278,9 +276,57 @@
       fill: red;
     }
 
-    #resetCamera {
+    .buttons-group {
+      position: absolute;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      z-index: 2;
+    }
+
+    .buttons-group.top-right {
       top: 50px;
       right: 30px;
+    }
+
+    .buttons-group.bottom-right {
+      bottom: 150px;
+      right: 30px;
+    }
+
+    #takePhotoButton {
+      padding-bottom: 20px;
+    }
+
+    #frameSize {
+      font-size: 1.5rem;
+    }
+
+    #frameSize {
+      background: rgba(0, 0, 0, 0.5);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      outline: none;
+      backdrop-filter: blur(4px);
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    #frameSize:hover {
+      background: rgba(0, 0, 0, 0.7);
+    }
+
+    #frameSize:focus {
+      background: rgba(0, 0, 0, 0.8);
+      transform: scale(1.02);
+    }
+
+    #frameSize option {
+      background: #000;
+      color: #fff;
+      padding: 10px 0;
     }
 
     #toggleFlash {
@@ -368,7 +414,7 @@
 
   <img id="stream" src="#">
   <span id="wifiIndicator" class="weak poor">
-    <svg xmlns="http://www.w3.org/2000/svg"  xmlns:xlink="http://www.w3.org/1999/xlink"" x=" 0" y="0"
+    <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"" x=" 0" y="0"
       viewBox="0 0 24 24">
       <path
         d="M21.484 10.027C16.45 5.256 8.698 5.005 3.378 9.274c-.295.237-.583.488-.862.753a.75.75 0 0 1-1.032-1.089c.31-.293.628-.57.955-.833 5.9-4.736 14.494-4.458 20.077.833a.75.75 0 0 1-1.032 1.089z"
@@ -382,8 +428,26 @@
     </svg>
     <span id="rssiValue"></span>
   </span>
-  <button id="resetCamera" class="controller function-button">↻</button>
-  <button id="toggleFlash" class="turned-off controller function-button">🔦</button>
+  <div class="buttons-group top-right">
+    <select name="frameSize" id="frameSize" class="controller">
+      <option value="FRAMESIZE_240X240">240x240</option>
+      <option value="FRAMESIZE_QVGA">340x240</option>
+      <option value="FRAMESIZE_HVGA">480x320</option>
+      <option value="FRAMESIZE_VGA">640x480</option>
+      <option value="FRAMESIZE_SVGA">800x600</option>
+      <option value="FRAMESIZE_XGA">1024x768🟡</option>
+      <option value="FRAMESIZE_HD">1280x720⚠️</option>
+      <option value="FRAMESIZE_SXGA">1280x1024⚠️⚠️</option>
+      <option value="FRAMESIZE_UXGA">1600x1200⚠️🌡️⚠️</option>
+    </select>
+    <button id="resetCamera" class="controller function-button">↻</button>
+    <button id="takePhotoButton" class="controller function-button">📸</button>
+  </div>
+
+  <div class="buttons-group bottom-right">
+    <button id="toggleFlash" class="turned-off controller function-button">🔦</button>
+  </div>
+
   <div class="joystick-wrapper">
     <div class="joystick vertical">
       <button class="controller movement-controller" id="forward">
@@ -685,8 +749,21 @@
     }
 
     function handleFunctions() {
+      const frameSizeSelect = document.getElementById("frameSize");
+      const takePhotoButton = document.getElementById("takePhotoButton");
+
       flashButton.addEventListener("click", function () {
         sendData("toggleFlash");
+      });
+
+      frameSizeSelect.addEventListener("change", function () {
+        const selectedValue = frameSizeSelect.value;
+
+        setFrameSize(selectedValue);
+      });
+
+      takePhotoButton.addEventListener("click", function () {
+        capturePhoto();
       });
     }
 
@@ -802,6 +879,37 @@
 
         onDragChange(newX, newY);
       }
+    }
+
+    async function capturePhoto() {
+      const button = document.getElementById('takePhotoButton');
+      button.disabled = true;
+
+      try {
+        const response = await fetch('/capture_photo');
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `esp32_${Date.now()}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Photo capture error:', error);
+
+      }
+
+      button.disabled = false;
+    }
+
+    async function setFrameSize(frameSizeValue) {
+      await fetch('/set_framesize', {
+        method: 'POST',
+        body: frameSizeValue,
+        headers: { 'Content-Type': 'text/plain' }
+      });
     }
 
     document.addEventListener("DOMContentLoaded", function () {

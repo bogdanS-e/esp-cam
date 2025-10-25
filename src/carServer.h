@@ -154,7 +154,6 @@ static esp_err_t streamHandler(httpd_req_t *req) {
   if (isClientActive) {
     Serial.println("Stream rejected - client already active");
     httpd_resp_send_404(req);
-
     return ESP_FAIL;
   }
 
@@ -166,6 +165,16 @@ static esp_err_t streamHandler(httpd_req_t *req) {
   size_t jpgBufferLength = 0;
   uint8_t *jpgBuffer = NULL;
   char part_buf[64];
+
+  sensor_t *s = esp_camera_sensor_get();
+  if (!s) {
+    Serial.println("NO SENSOR DETECTED");
+    httpd_resp_send_404(req);
+    return ESP_FAIL;
+  }
+
+  s->set_framesize(s, FRAMESIZE_VGA);
+  delay(100);
 
   res = httpd_resp_set_type(req, "multipart/x-mixed-replace;boundary=frame");
   if (res != ESP_OK) {
@@ -259,6 +268,101 @@ static esp_err_t indexHandler(httpd_req_t *req) {
   return sendHtmlChunked(req, htmlToSend);
 }
 
+static esp_err_t capturePhotoHandler(httpd_req_t *req) {
+  camera_fb_t *fb = NULL;
+  esp_err_t res = ESP_OK;
+  sensor_t *s = esp_camera_sensor_get();
+
+  if (!s) {
+    Serial.println("Camera sensor not found");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+
+  fb = esp_camera_fb_get();
+
+  if (!fb) {
+    Serial.println("Camera capture failed");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+
+  httpd_resp_set_type(req, "image/jpeg");
+  httpd_resp_set_hdr(req, "Content-Disposition", "inline; filename=capture.jpg");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+  char ts[32];
+  snprintf(ts, 32, "%lld.%06ld", fb->timestamp.tv_sec, fb->timestamp.tv_usec);
+  httpd_resp_set_hdr(req, "X-Timestamp", (const char *)ts);
+
+  if (fb->format == PIXFORMAT_JPEG) {
+    res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
+    Serial.printf("VGA JPEG sent: %u bytes\n", fb->len);
+  }
+
+  esp_camera_fb_return(fb);
+  return res;
+}
+
+static esp_err_t setFrameSizeHandler(httpd_req_t *req) {
+  char buf[32];
+  int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+
+  Serial.println("Set frame size request received: " + String(buf));
+
+  if (ret <= 0) {
+    httpd_resp_set_status(req, "500 Internal Server Error");
+    httpd_resp_send(req, "Camera sensor not found", HTTPD_RESP_USE_STRLEN);
+    return ESP_FAIL;
+  }
+
+  buf[ret] = '\0';
+
+  sensor_t *s = esp_camera_sensor_get();
+  if (!s) {
+    httpd_resp_set_status(req, "400 Bad Request");
+    httpd_resp_send(req, "Invalid request", HTTPD_RESP_USE_STRLEN);
+    return ESP_FAIL;
+  }
+
+  framesize_t newSize;
+  Serial.println("Here " + String(buf));
+
+  if (strcmp(buf, "FRAMESIZE_240X240") == 0)
+    newSize = FRAMESIZE_240X240;
+  else if (strcmp(buf, "FRAMESIZE_QVGA") == 0)
+    newSize = FRAMESIZE_QVGA;
+  else if (strcmp(buf, "FRAMESIZE_HVGA") == 0)
+    newSize = FRAMESIZE_HVGA;
+  else if (strcmp(buf, "FRAMESIZE_VGA") == 0)
+    newSize = FRAMESIZE_VGA;
+  else if (strcmp(buf, "FRAMESIZE_SVGA") == 0)
+    newSize = FRAMESIZE_SVGA;
+  else if (strcmp(buf, "FRAMESIZE_XGA") == 0)
+    newSize = FRAMESIZE_XGA;
+  else if (strcmp(buf, "FRAMESIZE_HD") == 0)
+    newSize = FRAMESIZE_HD;
+  else if (strcmp(buf, "FRAMESIZE_SXGA") == 0)
+    newSize = FRAMESIZE_SXGA;
+  else if (strcmp(buf, "FRAMESIZE_UXGA") == 0)
+    newSize = FRAMESIZE_UXGA;
+  else {
+    httpd_resp_set_status(req, "400 Bad Request");
+    httpd_resp_send(req, "Invalid request", HTTPD_RESP_USE_STRLEN);
+    return ESP_FAIL;
+  }
+
+  s->set_framesize(s, newSize);
+
+  char msg[64];
+  snprintf(msg, sizeof(msg), "Frame size set to %s\n", buf);
+  httpd_resp_set_type(req, "text/plain");
+  httpd_resp_send(req, msg, HTTPD_RESP_USE_STRLEN);
+
+  Serial.printf("✅ Frame size changed to %s\n", buf);
+  return ESP_OK;
+}
+
 void startCarServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 80;
@@ -275,11 +379,23 @@ void startCarServer() {
       .handler = websocketHandler,
       .user_ctx = NULL,
       .is_websocket = true};
+  httpd_uri_t photo_uri = {
+      .uri = "/capture_photo",
+      .method = HTTP_GET,
+      .handler = capturePhotoHandler,
+      .user_ctx = NULL};
+  httpd_uri_t set_framesize_uri = {
+      .uri = "/set_framesize",
+      .method = HTTP_POST,
+      .handler = setFrameSizeHandler,
+      .user_ctx = NULL};
 
   Serial.printf("Starting web server on port: '%d'\n", config.server_port);
 
   if (httpd_start(&camera_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(camera_httpd, &index_uri);
+    httpd_register_uri_handler(camera_httpd, &photo_uri);
+    httpd_register_uri_handler(camera_httpd, &set_framesize_uri);
     httpd_register_uri_handler(camera_httpd, &ws_uri);
     Serial.println("WebSocket handler registered on /ws");
   }
