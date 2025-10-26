@@ -4,6 +4,7 @@
 #include "soc/rtc_cntl_reg.h"
 #include "soc/soc.h"
 #include <WiFi.h>
+#include <WiFiManager.h>
 
 #include "Car.h"
 #include "carServer.h"
@@ -33,25 +34,18 @@ void setup() {
 
   // Connect to WiFi
   Serial.print("Connecting to WiFi");
-  WiFi.begin("bogdan", "seredenko ");
+  WiFiManager wm;
 
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
+  //wm.resetSettings();
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi connected!");
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
+  bool res = wm.autoConnect("WiFi Car");
+
+  if (!res) {
+    Serial.println("Failed to connect");
+    ESP.restart();
   } else {
-    Serial.println("\nFailed to connect to WiFi!");
-    return;
+    startCarServer();
   }
-
-  startCarServer();
 }
 
 void loop() {

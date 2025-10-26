@@ -363,6 +363,7 @@ static esp_err_t setFrameSizeHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
+// TODO create endpoint to reset Wifi manager credentials
 void startCarServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 80;
