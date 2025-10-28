@@ -1,0 +1,406 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* для более чётких границ на Android */
+  -moz-osx-font-smoothing: grayscale;
+  /* для Firefox */
+  text-rendering: optimizeLegibility;
+  background-color: #121212;
+  color: #E0E0E0;
+  width: 100dvw;
+  height: 100vh;
+  position: relative;
+  user-select: none;
+}
+
+button {
+  background-color: #388E3C;
+  border: none;
+  outline: none;
+  cursor: pointer;
+}
+
+button:focus,
+button:focus-within {
+  border: none;
+  outline: none;
+}
+
+button:active,
+button.active {
+  background-color: #2E7D32;
+}
+
+button:disabled {
+  background-color: #d3d3d3;
+  cursor: auto;
+  pointer-events: none;
+}
+
+#ac-mode,
+#rotate-message {
+  display: none;
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  background: inherit;
+}
+
+#ac-mode {
+  z-index: 4;
+  font-size: 2rem;
+  display: none;
+}
+
+#ac-mode.visible {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+
+#rotate-message .content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  animation: rotate 2s 500ms forwards;
+  font-size: 2rem;
+}
+
+#rotate-message svg {
+  animation: rotate-infinite 3s infinite;
+}
+
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(90deg);
+  }
+}
+
+@keyframes rotate-infinite {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#status {
+  padding: 5px;
+  border-radius: 0 0 16px 16px;
+  text-align: center;
+  background: #388E3C;
+  color: #fff;
+  font-size: 0.75rem;
+  position: fixed;
+  z-index: 3;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  transform: translateY(-100%);
+  transition: transform 0.4s ease, opacity 0.4s ease;
+  opacity: 0;
+}
+
+#status.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#status.disconnected {
+  background: #D32F2F;
+}
+
+#stream {
+  display: block;
+  border-radius: 16px;
+  width: 100%;
+  height: 100vh;
+  object-fit: contain;
+  background: transparent;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.joystick-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 30px 20px;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  z-index: 2;
+}
+
+.joystick {
+  width: 150px;
+  height: 100px;
+  border-radius: 130px;
+  background-color: #3a3a3a;
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  box-shadow: 0 0 20px #388E3C;
+  transition: box-shadow 0.2s;
+}
+
+.joystick:has(button.active) {
+  box-shadow: 0 0 40px #388E3C;
+}
+
+.joystick button {
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  transition: transform 0.1s, background-color 0.2s;
+}
+
+.joystick button:active,
+.joystick button.active {
+  transform: scale(0.8);
+}
+
+.joystick button:disabled {
+  opacity: 0.4;
+}
+
+.joystick svg {
+  width: 30px;
+  height: 30px;
+}
+
+.joystick.horizontal button {
+  width: 50%;
+  height: 100%;
+}
+
+.joystick.vertical {
+  flex-direction: column;
+}
+
+.joystick.vertical button {
+  width: 100%;
+  height: 50%;
+}
+
+#right {
+  border-radius: 0 130px 130px 0;
+}
+
+#left {
+  border-radius: 200px 0 0 200px;
+}
+
+#forward {
+  border-radius: 130px 130px 0 0;
+}
+
+#backward {
+  border-radius: 0 0 130px 130px;
+}
+
+#forward svg {
+  transform: rotate(-90deg);
+}
+
+#backward svg {
+  transform: rotate(90deg);
+}
+
+#left svg {
+  transform: rotate(-180deg);
+}
+
+.function-button {
+  border-radius: 50%;
+  padding: 15px;
+  font-size: 1.5rem;
+  border-radius: 50%;
+  width: 62px;
+  height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+#wifiIndicator {
+  position: absolute;
+  top: 10px;
+  left: 30px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#wifiIndicator svg {
+  width: 28px;
+  height: 28px;
+}
+
+#wifiIndicator.good path:first-child {
+  opacity: 0;
+}
+
+#wifiIndicator.weak path:first-child,
+#wifiIndicator.weak path:nth-child(2) {
+  opacity: 0;
+}
+
+#wifiIndicator.poor path:last-child {
+  fill: red;
+}
+
+.buttons-group {
+  position: absolute;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  z-index: 2;
+}
+
+.buttons-group.top-right {
+  top: 10px;
+  right: 30px;
+}
+
+.buttons-group.bottom-right {
+  bottom: 150px;
+  right: 30px;
+}
+
+#takePhotoButton {
+  padding-bottom: 20px;
+}
+
+#frameSize {
+  font-size: 1.5rem;
+}
+
+#frameSize {
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  outline: none;
+  backdrop-filter: blur(4px);
+  transition: background 0.2s, transform 0.1s;
+}
+
+#frameSize:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+#frameSize:focus {
+  background: rgba(0, 0, 0, 0.6);
+  transform: scale(1.02);
+}
+
+#frameSize option {
+  background: #000;
+  color: #fff;
+  padding: 10px 0;
+}
+
+#toggleFlash {
+  bottom: 150px;
+  right: 30px;
+}
+
+#toggleFlash:active,
+#toggleFlash.active {
+  background-color: #388E3C;
+}
+
+#toggleFlash.turned-off,
+#toggleFlash.turned-off:active,
+#toggleFlash.turned-off.active {
+  background-color: #616161;
+}
+
+/* Индикаторы */
+.range {
+  position: fixed;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+/* Горизонтальный (x) */
+#rangeX {
+  bottom: 30px;
+  left: 50%;
+  width: 200px;
+  height: 6px;
+  transform: translateX(-50%);
+}
+
+#thumbX {
+  position: absolute;
+  top: -4px;
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+#rangeY {
+  left: 20px;
+  top: 20%;
+  width: 6px;
+  height: 200px;
+  transform: translateY(-20%);
+}
+
+#thumbY {
+  position: absolute;
+  left: -4px;
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+#toggleWifiMode {
+  transform: scale(0.8);
+  position: absolute;
+  left: 25px;
+  top: 60px;
+  z-index: 1;
+}

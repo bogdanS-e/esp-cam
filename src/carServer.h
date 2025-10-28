@@ -214,12 +214,12 @@ static esp_err_t websocketHandler(httpd_req_t *req) {
     const char *message = car.getFlashState() ? "Flash-ON" : "Flash-OFF";
 
     sendResponse(req, message);
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(300 / portTICK_PERIOD_MS);
 
     char wifiStatus[16];
     snprintf(wifiStatus, sizeof(wifiStatus), "WIFI-%d", WiFi.status() == WL_CONNECTED);
     sendResponse(req, wifiStatus);
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(300 / portTICK_PERIOD_MS);
 
     sensor_t *s = esp_camera_sensor_get();
     if (s) {
@@ -345,18 +345,32 @@ static esp_err_t streamHandler(httpd_req_t *req) {
   return res;
 }
 
-esp_err_t sendHtmlChunked(httpd_req_t *req, const char *filepath) {
-  File file = LittleFS.open(filepath, "r");
-  if (!file) {
-    Serial.printf("Failed to open %s from LittleFS\n", filepath);
-    httpd_resp_send_500(req);
+static esp_err_t serveStaticFile(httpd_req_t *req, const char *filepath) {
+  String path = filepath;
 
+  // Determine content type
+  const char *type = "text/plain";
+  if (path.endsWith(".html"))
+    type = "text/html";
+  else if (path.endsWith(".js"))
+    type = "application/javascript";
+  else if (path.endsWith(".css"))
+    type = "text/css";
+  else if (path.endsWith(".png"))
+    type = "image/png";
+  else if (path.endsWith(".jpg") || path.endsWith(".jpeg"))
+    type = "image/jpeg";
+  else if (path.endsWith(".ico"))
+    type = "image/x-icon";
+
+  File file = LittleFS.open(path, "r");
+  if (!file) {
+    Serial.printf("404 Not Found: %s\n", path.c_str());
+    httpd_resp_send_404(req);
     return ESP_FAIL;
   }
 
-  // UTF-8 handlers
-  httpd_resp_set_type(req, "text/html");
-  httpd_resp_set_hdr(req, "Content-Type", "text/html; charset=utf-8");
+  httpd_resp_set_type(req, type);
 
   char chunk[512];
   size_t chunksize;
@@ -371,14 +385,8 @@ esp_err_t sendHtmlChunked(httpd_req_t *req, const char *filepath) {
   } while (chunksize > 0);
 
   file.close();
-  httpd_resp_send_chunk(req, NULL, 0); // Signal end of response
-
+  httpd_resp_send_chunk(req, NULL, 0);
   return ESP_OK;
-}
-
-static esp_err_t indexHandler(httpd_req_t *req) {
-  const char *htmlToSend = isClientActive ? "/busy.min.html" : "/index.min.html";
-  return sendHtmlChunked(req, htmlToSend);
 }
 
 static esp_err_t capturePhotoHandler(httpd_req_t *req) {
@@ -417,15 +425,19 @@ static esp_err_t capturePhotoHandler(httpd_req_t *req) {
   return res;
 }
 
-static esp_err_t resetToAP(httpd_req_t *req) {
-  wm.resetSettings();
-
-  ESP.restart();
-
-  return ESP_OK;
+static esp_err_t indexHandler(httpd_req_t *req) {
+  const char *htmlToSend = isClientActive ? "/busy.min.html" : "/index.min.html";
+  return serveStaticFile(req, htmlToSend);
 }
 
-// TODO create endpoint to reset Wifi manager credentials
+static esp_err_t styleHandler(httpd_req_t *req) {
+  return serveStaticFile(req, "/style.min.css");
+}
+
+static esp_err_t scriptHandler(httpd_req_t *req) {
+  return serveStaticFile(req, "/script.min.js");
+}
+
 void startCarServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 82;
@@ -447,6 +459,16 @@ void startCarServer() {
       .method = HTTP_GET,
       .handler = capturePhotoHandler,
       .user_ctx = NULL};
+  httpd_uri_t script_uri = {
+      .uri = "/script",
+      .method = HTTP_GET,
+      .handler = scriptHandler,
+      .user_ctx = NULL};
+  httpd_uri_t style_uri = {
+      .uri = "/style",
+      .method = HTTP_GET,
+      .handler = styleHandler,
+      .user_ctx = NULL};
 
   Serial.printf("Starting web server on port: '%d'\n", config.server_port);
 
@@ -454,6 +476,8 @@ void startCarServer() {
     httpd_register_uri_handler(camera_httpd, &index_uri);
     httpd_register_uri_handler(camera_httpd, &photo_uri);
     httpd_register_uri_handler(camera_httpd, &ws_uri);
+    httpd_register_uri_handler(camera_httpd, &script_uri);
+    httpd_register_uri_handler(camera_httpd, &style_uri);
     Serial.println("WebSocket handler registered on /ws");
   }
 
