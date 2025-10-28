@@ -55,6 +55,9 @@
       pointer-events: none;
     }
 
+
+
+    #ac-mode,
     #rotate-message {
       display: none;
       position: fixed;
@@ -64,6 +67,19 @@
       left: 0;
       z-index: 3;
       background: inherit;
+    }
+
+    #ac-mode {
+      z-index: 4;
+      font-size: 2rem;
+      display: none;
+    }
+
+    #ac-mode.visible {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
     }
 
     #rotate-message .content {
@@ -390,6 +406,14 @@
       border-radius: 50%;
       transform: translateY(-50%);
     }
+
+    #toggleWifiMode {
+      transform: scale(0.8);
+      position: absolute;
+      left: 25px;
+      top: 60px;
+      z-index: 1;
+    }
   </style>
 </head>
 
@@ -428,16 +452,15 @@
     </svg>
     <span id="rssiValue"></span>
   </span>
+  <button disabled id="toggleWifiMode" class="controller function-button">N</button>
   <div class="buttons-group top-right">
     <select name="frameSize" id="frameSize" class="controller">
       <option value="FRAMESIZE_240X240">240x240</option>
-      <option value="FRAMESIZE_QVGA">340x240</option>
       <option value="FRAMESIZE_HVGA">480x320</option>
       <option value="FRAMESIZE_VGA">640x480</option>
       <option value="FRAMESIZE_SVGA">800x600</option>
       <option value="FRAMESIZE_XGA">1024x768🟡</option>
       <option value="FRAMESIZE_HD">1280x720⚠️</option>
-      <option value="FRAMESIZE_SXGA">1280x1024⚠️⚠️</option>
       <option value="FRAMESIZE_UXGA">1600x1200⚠️🌡️⚠️</option>
     </select>
     <button id="resetCamera" class="controller function-button">↻</button>
@@ -492,12 +515,18 @@
     <div id="thumbY"></div>
   </div>
 
+  <div id="ac-mode">
+    Теперь законекться к вайфаю WiFi Car и перейди по адресу <strong><a
+        href="http://192.168.4.1:82">http://192.168.4.1:82</a></strong>
+    Машинка будет работать в режиме точки доступа (Acccess point)
+  </div>
   <script>
     'use strict';
-    var ws = null;
-    var currentUrl = window.location.hostname;
-    var statusElement = document.getElementById('status');
-    var flashButton = document.getElementById("toggleFlash");
+    let ws = null;
+    const currentUrl = window.location.hostname;
+    const statusElement = document.getElementById('status');
+    const flashButton = document.getElementById("toggleFlash");
+    const frameSizeSelect = document.getElementById("frameSize");
 
     function handleRotationScreen(params) {
       function checkOrientation() {
@@ -538,6 +567,14 @@
       const indicator = document.getElementById('wifiIndicator');
       const rssiValue = document.getElementById('rssiValue');
 
+      if (!rssi) {
+        indicator.style.display = 'none';
+
+        return;
+      }
+
+      indicator.style.display = '';
+
       if (rssi <= 55) {
         indicator.className = 'excellent';
       } else if (rssi <= 75) {
@@ -559,7 +596,7 @@
     function handleWebSocket() {
       if (ws && ws.readyState === WebSocket.OPEN) return;
 
-      ws = new WebSocket(`ws://${currentUrl}/ws`);
+      ws = new WebSocket(`ws://${currentUrl}:82/ws`);
 
       let heartbeatInterval;
       let missedPongs = 0;
@@ -605,20 +642,52 @@
             flashButton.classList.add("turned-off");
           }
         }
-      };
 
-      ws.onclose = function () {
-        console.log('WebSocket disconnected');
-        showStatus(false);
-        changeControls(true);
-        clearInterval(heartbeatInterval);
-        setTimeout(handleWebSocket, 2000);
-      };
+        if (event.data.startsWith("FRAMESIZE-")) {
+          const frameSize = event.data.split("-")[1];
 
-      ws.onerror = function (error) {
-        console.log('WebSocket error:', error);
-        clearInterval(heartbeatInterval);
-      };
+          frameSizeSelect.value = frameSize;
+        }
+
+        if (event.data.startsWith("WIFI-")) {
+          const toggleWifiModeButton = document.getElementById("toggleWifiMode");
+          const acModeScreen = document.getElementById("ac-mode");
+
+          const isStationMode = event.data.split("-")[1] === '1';
+          const text = isStationMode ? "AP" : "ST";
+
+          toggleWifiModeButton.removeAttribute("disabled");
+          toggleWifiModeButton.textContent = text;
+
+          if (!isStationMode) {
+            updateWiFiIndicator(null);
+          }
+
+          toggleWifiModeButton.onclick = function () {
+            if (isStationMode) {
+              sendData("reset");
+              acModeScreen.classList.add("visible");
+
+              return;
+            }
+
+            window.location.href = 'http://192.168.4.1/wifi?';
+          };
+        };
+
+        ws.onclose = function () {
+          console.log('WebSocket disconnected');
+          showStatus(false);
+          changeControls(true);
+          clearInterval(heartbeatInterval);
+          setTimeout(handleWebSocket, 2000);
+        };
+
+        ws.onerror = function (error) {
+          console.log('WebSocket error:', error);
+          clearInterval(heartbeatInterval);
+        };
+      }
     }
 
     function sendData(data) {
@@ -749,7 +818,6 @@
     }
 
     function handleFunctions() {
-      const frameSizeSelect = document.getElementById("frameSize");
       const takePhotoButton = document.getElementById("takePhotoButton");
 
       flashButton.addEventListener("click", function () {
@@ -759,7 +827,7 @@
       frameSizeSelect.addEventListener("change", function () {
         const selectedValue = frameSizeSelect.value;
 
-        setFrameSize(selectedValue);
+        sendData(`frameSize_${selectedValue}`);
       });
 
       takePhotoButton.addEventListener("click", function () {
@@ -902,14 +970,6 @@
       }
 
       button.disabled = false;
-    }
-
-    async function setFrameSize(frameSizeValue) {
-      await fetch('/set_framesize', {
-        method: 'POST',
-        body: frameSizeValue,
-        headers: { 'Content-Type': 'text/plain' }
-      });
     }
 
     document.addEventListener("DOMContentLoaded", function () {

@@ -62,14 +62,13 @@ static camera_config_t camera_config = {
     .jpeg_quality = 10,
     .fb_count = 2,
     .fb_location = CAMERA_FB_IN_PSRAM,
-    .grab_mode = CAMERA_GRAB_LATEST
-};
+    .grab_mode = CAMERA_GRAB_LATEST};
 
 class Car {
 public:
   Car() : flashState(false),
-          currentAngle(90),
-          targetAngle(90),
+          currentAngleX(90),
+          targetAngleX(90),
           lastUpdate(0),
           motorL(LEFT_MOTOR_PWM_1, LEFT_MOTOR_PWM_2, LEFT_MOTOR_CHANNEL_1, LEFT_MOTOR_CHANNEL_2),
           motorR(RIGHT_MOTOR_PWM_1, RIGHT_MOTOR_PWM_2, RIGHT_MOTOR_CHANNEL_1, RIGHT_MOTOR_CHANNEL_2) {}
@@ -84,18 +83,6 @@ public:
     servoX.write(90);
 
     return initCamera();
-  }
-
-  void capturePhoto() {
-    camera_fb_t *fb = esp_camera_fb_get();
-
-    if (!fb) {
-      Serial.println("Camera capture failed");
-      return;
-    }
-
-    Serial.printf("Captured %d bytes\n", fb->len);
-    esp_camera_fb_return(fb);
   }
 
   void turnOnFlash() {
@@ -114,11 +101,11 @@ public:
     flashState = !flashState;
     digitalWrite(FLASH_PIN, flashState ? HIGH : LOW);
     motorMax = flashState ? 200 : 255; // TODO remove it
-
-    Serial.printf("Flash toggled to %s\n", flashState ? "ON" : "OFF");
   }
 
-  bool getFlashState() const { return flashState; }
+  bool getFlashState() {
+    return flashState;
+  }
 
   void moveForward() {
     motorL.moveForward(motorMax);
@@ -130,19 +117,45 @@ public:
     motorR.moveBackward(motorMax);
   }
 
-  void turnLeft() { Serial.println("Left"); }
-  void turnRight() { Serial.println("Right"); }
-  
+  void turnLeft() {
+    motorL.moveForward(motorMax);
+    motorR.moveBackward(motorMax);
+  }
+
+  void turnRight() {
+    motorL.moveBackward(motorMax);
+    motorR.moveForward(motorMax);
+  }
+
+  void moveForwardLeft() {
+    motorL.moveForward(motorMax / 1.2);
+    motorR.moveForward(motorMax);
+  }
+
+  void moveForwardRight() {
+    motorL.moveForward(motorMax);
+    motorR.moveForward(motorMax / 1.2);
+  }
+
+  void moveBackwardLeft() {
+    motorL.moveBackward(motorMax / 1.2);
+    motorR.moveBackward(motorMax);
+  }
+
+  void moveBackwardRight() {
+    motorL.moveBackward(motorMax);
+    motorR.moveBackward(motorMax / 1.2);
+  }
+
   void stop() {
-    Serial.println("Stop");
     motorL.stop();
     motorR.stop();
   }
 
   void setCameraX(int x) {
     x = constrain(x, -100, 100);
-    targetAngle = map(x, -100, 100, 0, 180);
-    Serial.printf("Target camera angle: %d\n", targetAngle);
+    targetAngleX = map(x, -100, 100, 0, 180);
+    Serial.printf("Target camera angle: %d\n", targetAngleX);
   }
 
   void updateServo() {
@@ -152,30 +165,30 @@ public:
       return;
     lastUpdate = now;
 
-    if (currentAngle == targetAngle)
+    if (currentAngleX == targetAngleX)
       return;
 
-    int diff = targetAngle - currentAngle;
+    int diff = targetAngleX - currentAngleX;
 
     int step = constrain(abs(diff) / 4 + 1, 1, 8);
     if (diff > 0)
-      currentAngle += step;
+      currentAngleX += step;
     else
-      currentAngle -= step;
+      currentAngleX -= step;
 
-    if ((diff > 0 && currentAngle > targetAngle) ||
-        (diff < 0 && currentAngle < targetAngle))
-      currentAngle = targetAngle;
+    if ((diff > 0 && currentAngleX > targetAngleX) ||
+        (diff < 0 && currentAngleX < targetAngleX))
+      currentAngleX = targetAngleX;
 
-    servoX.write(currentAngle);
+    servoX.write(currentAngleX);
   }
 
 private:
   bool flashState;
   Servo servoX;
 
-  int currentAngle;
-  int targetAngle;
+  int currentAngleX;
+  int targetAngleX;
   unsigned long lastUpdate;
 
   uint8_t motorMax = 255;
@@ -198,45 +211,6 @@ private:
     motorL.begin();
     motorR.begin();
   }
-
-  /* void processCommand(const char *command) {
-    if (strcmp(command, "forward") == 0) {
-      motorL.setSpeedPerc(motorMax);
-      motorR.setSpeedPerc(motorMax);
-    } else if (strcmp(command, "backward") == 0) {
-      motorL.setSpeedPerc(-motorMax);
-      motorR.setSpeedPerc(-motorMax);
-    } else if (strcmp(command, "right") == 0) {
-      motorL.setSpeedPerc(motorMax / 2);
-      motorR.setSpeedPerc(-motorMax / 2);
-    } else if (strcmp(command, "left") == 0) {
-      motorL.setSpeedPerc(-motorMax / 2);
-      motorR.setSpeedPerc(motorMax / 2);
-    } else if (strcmp(command, "G") == 0) { // Forward left
-      motorL.setSpeedPerc(motorMax / 4);
-      motorR.setSpeedPerc(motorMax);
-    } else if (strcmp(command, "H") == 0) { // Forward right
-      motorL.setSpeedPerc(motorMax);
-      motorR.setSpeedPerc(motorMax / 4);
-    } else if (strcmp(command, "I") == 0) { // Backward left
-      motorL.setSpeedPerc(-motorMax / 4);
-      motorR.setSpeedPerc(-motorMax);
-    } else if (strcmp(command, "J") == 0) { // Backward right
-      motorR.setSpeedPerc(-motorMax / 4);
-      motorL.setSpeedPerc(-motorMax);
-    } else if (strcmp(command, "stop") == 0) {
-      motorL.stop();
-      motorR.stop();
-    } else if (strcmp(command, "1") == 0) {
-      motorMax = 50;
-    } else if (strcmp(command, "2") == 0) {
-      motorMax = 70;
-    } else if (strcmp(command, "3") == 0) {
-      motorMax = 80;
-    } else if (strcmp(command, "4") == 0) {
-      motorMax = 100;
-    }
-  } */
 };
 
 #endif // CAR_H

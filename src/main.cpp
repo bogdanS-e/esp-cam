@@ -10,6 +10,7 @@
 #include "carServer.h"
 
 Car car;
+WiFiManager wm;
 
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
@@ -32,22 +33,21 @@ void setup() {
     ESP.restart();
   }
 
+  WiFi.mode(WIFI_STA);
+  wm.setConfigPortalBlocking(false);
+  wm.setCaptivePortalEnable(false);
+  wm.setConnectTimeout(5);
+
   // Connect to WiFi
   Serial.print("Connecting to WiFi");
-  WiFiManager wm;
 
-  //wm.resetSettings();
+  // wm.resetSettings();
 
-  bool res = wm.autoConnect("WiFi Car");
-
-  if (!res) {
-    Serial.println("Failed to connect");
-    ESP.restart();
-  } else {
-    startCarServer();
-  }
+  wm.autoConnect("WiFi Car");
+  startCarServer();
 }
 
 void loop() {
   car.updateServo();
+  wm.process();
 }

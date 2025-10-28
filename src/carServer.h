@@ -2,11 +2,13 @@
 #include "car.h"
 #include "esp_camera.h"
 #include "esp_http_server.h"
+#include <WiFiManager.h>
 
 static bool isClientActive = false;
 httpd_handle_t stream_httpd = NULL;
 httpd_handle_t camera_httpd = NULL;
 extern Car car;
+extern WiFiManager wm;
 
 // Send response via WebSocket
 void sendResponse(httpd_req_t *req, const char *message) {
@@ -28,6 +30,34 @@ void sendResponse(httpd_req_t *req, const char *message) {
   }
 }
 
+bool setFrameSize(const char *sizeName) {
+  sensor_t *s = esp_camera_sensor_get();
+  if (!s)
+    return false;
+
+  framesize_t newSize;
+  if (strcmp(sizeName, "FRAMESIZE_240X240") == 0)
+    newSize = FRAMESIZE_240X240;
+  else if (strcmp(sizeName, "FRAMESIZE_HVGA") == 0)
+    newSize = FRAMESIZE_HVGA;
+  else if (strcmp(sizeName, "FRAMESIZE_VGA") == 0)
+    newSize = FRAMESIZE_VGA;
+  else if (strcmp(sizeName, "FRAMESIZE_SVGA") == 0)
+    newSize = FRAMESIZE_SVGA;
+  else if (strcmp(sizeName, "FRAMESIZE_XGA") == 0)
+    newSize = FRAMESIZE_XGA;
+  else if (strcmp(sizeName, "FRAMESIZE_HD") == 0)
+    newSize = FRAMESIZE_HD;
+  else if (strcmp(sizeName, "FRAMESIZE_UXGA") == 0)
+    newSize = FRAMESIZE_UXGA;
+  else
+    return false;
+
+  s->set_framesize(s, newSize);
+  Serial.printf("✅ Frame size changed to %s\n", sizeName);
+  return true;
+}
+
 void handleCarCommand(const char *command, httpd_req_t *req) {
   Serial.printf("Command handler received: %s\n", command);
 
@@ -46,6 +76,21 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
     if (sscanf(command + 11, "%d_%d", &x, &y) == 2) {
       car.setCameraX(x);
     }
+
+    return;
+  }
+
+  if (strncmp(command, "frameSize_", 10) == 0) {
+    const char *sizeName = command + 10;
+
+    setFrameSize(sizeName);
+
+    return;
+  }
+
+  if (strcmp(command, "reset") == 0) {
+    wm.resetSettings();
+    ESP.restart();
 
     return;
   }
@@ -112,12 +157,80 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
   Serial.printf("Unknown command: %s\n", command);
 }
 
+const char *frameSizeToString(framesize_t size) {
+  switch (size) {
+  case FRAMESIZE_96X96:
+    return "FRAMESIZE_96X96";
+  case FRAMESIZE_QQVGA:
+    return "FRAMESIZE_QQVGA";
+  case FRAMESIZE_QCIF:
+    return "FRAMESIZE_QCIF";
+  case FRAMESIZE_HQVGA:
+    return "FRAMESIZE_HQVGA";
+  case FRAMESIZE_240X240:
+    return "FRAMESIZE_240X240";
+  case FRAMESIZE_QVGA:
+    return "FRAMESIZE_QVGA";
+  case FRAMESIZE_CIF:
+    return "FRAMESIZE_CIF";
+  case FRAMESIZE_HVGA:
+    return "FRAMESIZE_HVGA";
+  case FRAMESIZE_VGA:
+    return "FRAMESIZE_VGA";
+  case FRAMESIZE_SVGA:
+    return "FRAMESIZE_SVGA";
+  case FRAMESIZE_XGA:
+    return "FRAMESIZE_XGA";
+  case FRAMESIZE_HD:
+    return "FRAMESIZE_HD";
+  case FRAMESIZE_SXGA:
+    return "FRAMESIZE_SXGA";
+  case FRAMESIZE_UXGA:
+    return "FRAMESIZE_UXGA";
+  case FRAMESIZE_FHD:
+    return "FRAMESIZE_FHD";
+  case FRAMESIZE_P_HD:
+    return "FRAMESIZE_P_HD";
+  case FRAMESIZE_P_3MP:
+    return "FRAMESIZE_P_3MP";
+  case FRAMESIZE_QXGA:
+    return "FRAMESIZE_QXGA";
+  case FRAMESIZE_QHD:
+    return "FRAMESIZE_QHD";
+  case FRAMESIZE_WQXGA:
+    return "FRAMESIZE_WQXGA";
+  case FRAMESIZE_P_FHD:
+    return "FRAMESIZE_P_FHD";
+  case FRAMESIZE_QSXGA:
+    return "FRAMESIZE_QSXGA";
+  default:
+    return "UNKNOWN";
+  }
+}
+
 static esp_err_t websocketHandler(httpd_req_t *req) {
   if (req->method == HTTP_GET) {
-    Serial.println("WebSocket connection requested");
+    Serial.println("WebSocket connection requested" + String(WiFi.status()));
     const char *message = car.getFlashState() ? "Flash-ON" : "Flash-OFF";
 
     sendResponse(req, message);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    char wifiStatus[16];
+    snprintf(wifiStatus, sizeof(wifiStatus), "WIFI-%d", WiFi.status() == WL_CONNECTED);
+    sendResponse(req, wifiStatus);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    sensor_t *s = esp_camera_sensor_get();
+    if (s) {
+      const char *frameSizeName = frameSizeToString(s->status.framesize);
+      char frameMsg[64];
+      snprintf(frameMsg, sizeof(frameMsg), "FRAMESIZE-%s", frameSizeName);
+      sendResponse(req, frameMsg);
+      Serial.printf("📸 Current frame size: %s\n", frameSizeName);
+    } else {
+      Serial.println("⚠️ Camera sensor not found!");
+    }
 
     return ESP_OK;
   }
@@ -304,69 +417,18 @@ static esp_err_t capturePhotoHandler(httpd_req_t *req) {
   return res;
 }
 
-static esp_err_t setFrameSizeHandler(httpd_req_t *req) {
-  char buf[32];
-  int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+static esp_err_t resetToAP(httpd_req_t *req) {
+  wm.resetSettings();
 
-  Serial.println("Set frame size request received: " + String(buf));
+  ESP.restart();
 
-  if (ret <= 0) {
-    httpd_resp_set_status(req, "500 Internal Server Error");
-    httpd_resp_send(req, "Camera sensor not found", HTTPD_RESP_USE_STRLEN);
-    return ESP_FAIL;
-  }
-
-  buf[ret] = '\0';
-
-  sensor_t *s = esp_camera_sensor_get();
-  if (!s) {
-    httpd_resp_set_status(req, "400 Bad Request");
-    httpd_resp_send(req, "Invalid request", HTTPD_RESP_USE_STRLEN);
-    return ESP_FAIL;
-  }
-
-  framesize_t newSize;
-  Serial.println("Here " + String(buf));
-
-  if (strcmp(buf, "FRAMESIZE_240X240") == 0)
-    newSize = FRAMESIZE_240X240;
-  else if (strcmp(buf, "FRAMESIZE_QVGA") == 0)
-    newSize = FRAMESIZE_QVGA;
-  else if (strcmp(buf, "FRAMESIZE_HVGA") == 0)
-    newSize = FRAMESIZE_HVGA;
-  else if (strcmp(buf, "FRAMESIZE_VGA") == 0)
-    newSize = FRAMESIZE_VGA;
-  else if (strcmp(buf, "FRAMESIZE_SVGA") == 0)
-    newSize = FRAMESIZE_SVGA;
-  else if (strcmp(buf, "FRAMESIZE_XGA") == 0)
-    newSize = FRAMESIZE_XGA;
-  else if (strcmp(buf, "FRAMESIZE_HD") == 0)
-    newSize = FRAMESIZE_HD;
-  else if (strcmp(buf, "FRAMESIZE_SXGA") == 0)
-    newSize = FRAMESIZE_SXGA;
-  else if (strcmp(buf, "FRAMESIZE_UXGA") == 0)
-    newSize = FRAMESIZE_UXGA;
-  else {
-    httpd_resp_set_status(req, "400 Bad Request");
-    httpd_resp_send(req, "Invalid request", HTTPD_RESP_USE_STRLEN);
-    return ESP_FAIL;
-  }
-
-  s->set_framesize(s, newSize);
-
-  char msg[64];
-  snprintf(msg, sizeof(msg), "Frame size set to %s\n", buf);
-  httpd_resp_set_type(req, "text/plain");
-  httpd_resp_send(req, msg, HTTPD_RESP_USE_STRLEN);
-
-  Serial.printf("✅ Frame size changed to %s\n", buf);
   return ESP_OK;
 }
 
 // TODO create endpoint to reset Wifi manager credentials
 void startCarServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-  config.server_port = 80;
+  config.server_port = 82;
   config.ctrl_port = 32768;
 
   httpd_uri_t index_uri = {
@@ -385,18 +447,12 @@ void startCarServer() {
       .method = HTTP_GET,
       .handler = capturePhotoHandler,
       .user_ctx = NULL};
-  httpd_uri_t set_framesize_uri = {
-      .uri = "/set_framesize",
-      .method = HTTP_POST,
-      .handler = setFrameSizeHandler,
-      .user_ctx = NULL};
 
   Serial.printf("Starting web server on port: '%d'\n", config.server_port);
 
   if (httpd_start(&camera_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(camera_httpd, &index_uri);
     httpd_register_uri_handler(camera_httpd, &photo_uri);
-    httpd_register_uri_handler(camera_httpd, &set_framesize_uri);
     httpd_register_uri_handler(camera_httpd, &ws_uri);
     Serial.println("WebSocket handler registered on /ws");
   }
