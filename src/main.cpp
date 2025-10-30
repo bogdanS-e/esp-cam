@@ -43,6 +43,8 @@ void setup() {
 
   wm.autoConnect("WiFi Car");
   startCarServer();
+  /* pinMode(33, OUTPUT);
+  digitalWrite(33, LOW); */
 }
 
 void setupMDNS() {
@@ -67,17 +69,15 @@ void setupMDNS() {
 }
 
 void loop() {
-  car.updateServo();
+  car.tick();
   wm.process();
 
-  // Проверяем подключение к WiFi и запускаем mDNS
   if (WiFi.status() == WL_CONNECTED && !mDNSStarted) {
     Serial.print("WiFi connected! IP address: ");
     Serial.println(WiFi.localIP());
     setupMDNS();
   }
 
-  // Если соединение потеряно, сбрасываем флаг mDNS
   if (WiFi.status() != WL_CONNECTED && mDNSStarted) {
     mDNSStarted = false;
     Serial.println("WiFi disconnected, mDNS stopped");

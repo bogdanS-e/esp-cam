@@ -70,6 +70,8 @@ public:
           currentAngleX(90),
           targetAngleX(90),
           lastUpdate(0),
+          lastCommandTime(0),
+          motorStopped(true),
           motorL(LEFT_MOTOR_PWM_1, LEFT_MOTOR_PWM_2, LEFT_MOTOR_CHANNEL_1, LEFT_MOTOR_CHANNEL_2),
           motorR(RIGHT_MOTOR_PWM_1, RIGHT_MOTOR_PWM_2, RIGHT_MOTOR_CHANNEL_1, RIGHT_MOTOR_CHANNEL_2) {}
 
@@ -82,7 +84,19 @@ public:
     servoX.attach(SERVO_PIN);
     servoX.write(90);
 
+    lastCommandTime = millis();
+
     return initCamera();
+  }
+
+  void onCommand() {
+    lastCommandTime = millis();
+    motorStopped = false;
+  }
+
+  void tick() {
+    updateServo();
+    tickAutoStop();
   }
 
   void turnOnFlash() {
@@ -100,7 +114,6 @@ public:
   void toggleFlash() {
     flashState = !flashState;
     digitalWrite(FLASH_PIN, flashState ? HIGH : LOW);
-    motorMax = flashState ? 200 : 255; // TODO remove it
   }
 
   bool getFlashState() {
@@ -108,41 +121,49 @@ public:
   }
 
   void moveForward() {
+    onCommand();
     motorL.moveForward(motorMax);
     motorR.moveForward(motorMax);
   }
 
   void moveBackward() {
+    onCommand();
     motorL.moveBackward(motorMax);
     motorR.moveBackward(motorMax);
   }
 
   void turnLeft() {
+    onCommand();
     motorL.moveForward(motorMax);
     motorR.moveBackward(motorMax);
   }
 
   void turnRight() {
+    onCommand();
     motorL.moveBackward(motorMax);
     motorR.moveForward(motorMax);
   }
 
   void moveForwardLeft() {
+    onCommand();
     motorL.moveForward(motorMax / 1.2);
     motorR.moveForward(motorMax);
   }
 
   void moveForwardRight() {
+    onCommand();
     motorL.moveForward(motorMax);
     motorR.moveForward(motorMax / 1.2);
   }
 
   void moveBackwardLeft() {
+    onCommand();
     motorL.moveBackward(motorMax / 1.2);
     motorR.moveBackward(motorMax);
   }
 
   void moveBackwardRight() {
+    onCommand();
     motorL.moveBackward(motorMax);
     motorR.moveBackward(motorMax / 1.2);
   }
@@ -150,37 +171,12 @@ public:
   void stop() {
     motorL.stop();
     motorR.stop();
+    motorStopped = true;
   }
 
   void setCameraX(int x) {
     x = constrain(x, -100, 100);
     targetAngleX = map(x, -100, 100, 0, 180);
-    Serial.printf("Target camera angle: %d\n", targetAngleX);
-  }
-
-  void updateServo() {
-    unsigned long now = millis();
-    const int stepDelay = 5;
-    if (now - lastUpdate < stepDelay)
-      return;
-    lastUpdate = now;
-
-    if (currentAngleX == targetAngleX)
-      return;
-
-    int diff = targetAngleX - currentAngleX;
-
-    int step = constrain(abs(diff) / 4 + 1, 1, 8);
-    if (diff > 0)
-      currentAngleX += step;
-    else
-      currentAngleX -= step;
-
-    if ((diff > 0 && currentAngleX > targetAngleX) ||
-        (diff < 0 && currentAngleX < targetAngleX))
-      currentAngleX = targetAngleX;
-
-    servoX.write(currentAngleX);
   }
 
 private:
@@ -194,6 +190,40 @@ private:
   uint8_t motorMax = 255;
   Motor motorL;
   Motor motorR;
+
+  unsigned long lastCommandTime;
+  bool motorStopped;
+
+  void updateServo() {
+    unsigned long now = millis();
+    const int stepDelay = 5;
+    if (now - lastUpdate < stepDelay)
+      return;
+    lastUpdate = now;
+
+    if (currentAngleX == targetAngleX)
+      return;
+
+    int diff = targetAngleX - currentAngleX;
+    int step = constrain(abs(diff) / 4 + 1, 1, 8);
+    currentAngleX += (diff > 0) ? step : -step;
+
+    if ((diff > 0 && currentAngleX > targetAngleX) ||
+        (diff < 0 && currentAngleX < targetAngleX))
+      currentAngleX = targetAngleX;
+
+    servoX.write(currentAngleX);
+  }
+
+  void tickAutoStop() {
+    unsigned long now = millis();
+    const unsigned long AUTOSTOP_TIMEOUT_MS = 300;
+
+    if (!motorStopped && (now - lastCommandTime > AUTOSTOP_TIMEOUT_MS)) {
+      stop();
+      Serial.println("[AutoStop] No command for 300ms, stopping motors");
+    }
+  }
 
   esp_err_t initCamera() {
     esp_err_t err = esp_camera_init(&camera_config);
