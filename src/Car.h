@@ -75,6 +75,14 @@ public:
           motorL(LEFT_MOTOR_PWM_1, LEFT_MOTOR_PWM_2, LEFT_MOTOR_CHANNEL_1, LEFT_MOTOR_CHANNEL_2),
           motorR(RIGHT_MOTOR_PWM_1, RIGHT_MOTOR_PWM_2, RIGHT_MOTOR_CHANNEL_1, RIGHT_MOTOR_CHANNEL_2) {}
 
+  // some esp pins are pulled up on boot, so we need to set them to LOW before main app starts to avoid motor movement
+  void preinit() {
+    digitalWrite(LEFT_MOTOR_PWM_1, LOW);
+    digitalWrite(LEFT_MOTOR_PWM_2, LOW);
+    digitalWrite(RIGHT_MOTOR_PWM_1, LOW);
+    digitalWrite(RIGHT_MOTOR_PWM_2, LOW);
+  }
+
   esp_err_t init() {
     pinMode(FLASH_PIN, OUTPUT);
     digitalWrite(FLASH_PIN, LOW);
@@ -217,11 +225,11 @@ private:
 
   void tickAutoStop() {
     unsigned long now = millis();
-    const unsigned long AUTOSTOP_TIMEOUT_MS = 300;
+    const unsigned long AUTOSTOP_TIMEOUT_MS = 500;
 
     if (!motorStopped && (now - lastCommandTime > AUTOSTOP_TIMEOUT_MS)) {
       stop();
-      Serial.println("[AutoStop] No command for 300ms, stopping motors");
+      Serial.println("[AutoStop] No command for 500ms, stopping motors");
     }
   }
 
@@ -232,6 +240,15 @@ private:
       Serial.printf("Camera error: 0x%x\n", err);
       return err;
     }
+
+    sensor_t *s = esp_camera_sensor_get();
+    if (!s) {
+      Serial.println("NO SENSOR DETECTED");
+      return ESP_FAIL;
+    }
+
+    s->set_framesize(s, FRAMESIZE_VGA);
+    delay(100);
 
     Serial.println("Camera initialized");
     return ESP_OK;

@@ -58,6 +58,17 @@ bool setFrameSize(const char *sizeName) {
   return true;
 }
 
+int getClientRSSI() {
+  wifi_sta_list_t wifi_sta_list;
+  esp_wifi_ap_get_sta_list(&wifi_sta_list);
+
+  if (wifi_sta_list.num == 0) {
+    return 0;
+  }
+
+  return wifi_sta_list.sta[0].rssi;
+}
+
 void handleCarCommand(const char *command, httpd_req_t *req) {
   Serial.printf("Command handler received: %s\n", command);
 
@@ -96,7 +107,7 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
   }
 
   if (strcmp(command, "ping") == 0) {
-    int rssi = WiFi.RSSI();
+    int rssi = (WiFi.getMode() & WIFI_MODE_AP) ? getClientRSSI() : WiFi.RSSI();
 
     char response[32];
 
@@ -119,31 +130,37 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
   }
 
   if (strcmp(command, "left") == 0) {
+    car.turnLeft();
 
     return;
   }
 
   if (strcmp(command, "right") == 0) {
-
+    car.turnRight();
+    
     return;
   }
 
   if (strcmp(command, "forward-left") == 0) {
+    car.moveForwardLeft();
 
     return;
   }
 
   if (strcmp(command, "forward-right") == 0) {
+    car.moveForwardRight();
 
     return;
   }
 
   if (strcmp(command, "backward-left") == 0) {
+    car.moveBackwardLeft();
 
     return;
   }
 
   if (strcmp(command, "backward-right") == 0) {
+    car.moveBackwardRight();
 
     return;
   }
@@ -286,10 +303,8 @@ static esp_err_t streamHandler(httpd_req_t *req) {
     return ESP_FAIL;
   }
 
-  s->set_framesize(s, FRAMESIZE_VGA);
-  delay(100);
-
   res = httpd_resp_set_type(req, "multipart/x-mixed-replace;boundary=frame");
+
   if (res != ESP_OK) {
     isClientActive = false;
     return res;
@@ -460,12 +475,12 @@ void startCarServer() {
       .handler = capturePhotoHandler,
       .user_ctx = NULL};
   httpd_uri_t script_uri = {
-      .uri = "/script",
+      .uri = "/script.js",
       .method = HTTP_GET,
       .handler = scriptHandler,
       .user_ctx = NULL};
   httpd_uri_t style_uri = {
-      .uri = "/style",
+      .uri = "/style.css",
       .method = HTTP_GET,
       .handler = styleHandler,
       .user_ctx = NULL};

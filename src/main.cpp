@@ -9,6 +9,7 @@
 
 #include "Car.h"
 #include "carServer.h"
+#include "customApSuccess.h"
 
 Car car;
 WiFiManager wm;
@@ -38,10 +39,11 @@ void setup() {
   wm.setConfigPortalBlocking(false);
   wm.setCaptivePortalEnable(false);
   wm.setConnectTimeout(8);
-
-  // wm.resetSettings();
+  wm.setDarkMode(true);
+  addCustomWiFiManagerUI(wm);
 
   wm.autoConnect("WiFi Car");
+
   startCarServer();
   /* pinMode(33, OUTPUT);
   digitalWrite(33, LOW); */
