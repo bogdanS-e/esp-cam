@@ -26,7 +26,6 @@
 #define SERVO_PIN 2
 #define FLASH_PIN 4
 
-// pins
 #define RIGHT_MOTOR_PWM_1 12
 #define RIGHT_MOTOR_PWM_2 13
 #define RIGHT_MOTOR_CHANNEL_1 2
@@ -36,6 +35,10 @@
 #define LEFT_MOTOR_PWM_2 15
 #define LEFT_MOTOR_CHANNEL_1 3
 #define LEFT_MOTOR_CHANNEL_2 5
+
+inline uint64_t nowMs() {
+  return esp_timer_get_time() / 1000ULL;
+}
 
 static camera_config_t camera_config = {
     .pin_pwdn = PWDN_GPIO_NUM,
@@ -66,16 +69,16 @@ static camera_config_t camera_config = {
 
 class Car {
 public:
-  Car() : flashState(false),
-          currentAngleX(90),
-          targetAngleX(90),
-          lastUpdate(0),
-          lastCommandTime(0),
-          motorStopped(true),
-          motorL(LEFT_MOTOR_PWM_1, LEFT_MOTOR_PWM_2, LEFT_MOTOR_CHANNEL_1, LEFT_MOTOR_CHANNEL_2),
-          motorR(RIGHT_MOTOR_PWM_1, RIGHT_MOTOR_PWM_2, RIGHT_MOTOR_CHANNEL_1, RIGHT_MOTOR_CHANNEL_2) {}
+  Car()
+      : flashState(false),
+        currentAngleX(90),
+        targetAngleX(90),
+        lastUpdate(0),
+        lastCommandTime(0),
+        motorStopped(true),
+        motorL(LEFT_MOTOR_PWM_1, LEFT_MOTOR_PWM_2, LEFT_MOTOR_CHANNEL_1, LEFT_MOTOR_CHANNEL_2),
+        motorR(RIGHT_MOTOR_PWM_1, RIGHT_MOTOR_PWM_2, RIGHT_MOTOR_CHANNEL_1, RIGHT_MOTOR_CHANNEL_2) {}
 
-  // some esp pins are pulled up on boot, so we need to set them to LOW before main app starts to avoid motor movement
   void preinit() {
     digitalWrite(LEFT_MOTOR_PWM_1, LOW);
     digitalWrite(LEFT_MOTOR_PWM_2, LOW);
@@ -92,13 +95,13 @@ public:
     servoX.attach(SERVO_PIN);
     servoX.write(90);
 
-    lastCommandTime = millis();
+    lastCommandTime = nowMs();
 
     return initCamera();
   }
 
   void onCommand() {
-    lastCommandTime = millis();
+    lastCommandTime = nowMs();
     motorStopped = false;
   }
 
@@ -140,13 +143,13 @@ public:
     motorR.moveBackward(motorMax);
   }
 
-  void turnLeft() {
+  void turnRight() {
     onCommand();
     motorL.moveForward(motorMax);
     motorR.moveBackward(motorMax);
   }
 
-  void turnRight() {
+  void turnLeft() {
     onCommand();
     motorL.moveBackward(motorMax);
     motorR.moveForward(motorMax);
@@ -193,41 +196,51 @@ private:
 
   int currentAngleX;
   int targetAngleX;
-  unsigned long lastUpdate;
+  uint64_t lastUpdate;
 
   uint8_t motorMax = 255;
   Motor motorL;
   Motor motorR;
 
-  unsigned long lastCommandTime;
+  uint64_t lastCommandTime;
   bool motorStopped;
 
   void updateServo() {
-    unsigned long now = millis();
+    uint64_t now = nowMs();
     const int stepDelay = 5;
-    if (now - lastUpdate < stepDelay)
+
+    int64_t diff = (int64_t)(now - lastUpdate);
+    if (diff < 0)
+      diff = 0;
+
+    if (diff < stepDelay)
       return;
+
     lastUpdate = now;
 
     if (currentAngleX == targetAngleX)
       return;
 
-    int diff = targetAngleX - currentAngleX;
-    int step = constrain(abs(diff) / 4 + 1, 1, 8);
-    currentAngleX += (diff > 0) ? step : -step;
+    int delta = targetAngleX - currentAngleX;
+    int step = constrain(abs(delta) / 4 + 1, 1, 8);
+    currentAngleX += (delta > 0) ? step : -step;
 
-    if ((diff > 0 && currentAngleX > targetAngleX) ||
-        (diff < 0 && currentAngleX < targetAngleX))
+    if ((delta > 0 && currentAngleX > targetAngleX) ||
+        (delta < 0 && currentAngleX < targetAngleX))
       currentAngleX = targetAngleX;
 
     servoX.write(currentAngleX);
   }
 
   void tickAutoStop() {
-    unsigned long now = millis();
-    const unsigned long AUTOSTOP_TIMEOUT_MS = 500;
+    const uint64_t AUTOSTOP_TIMEOUT_MS = 500;
+    uint64_t now = nowMs();
 
-    if (!motorStopped && (now - lastCommandTime > AUTOSTOP_TIMEOUT_MS)) {
+    int64_t diff = (int64_t)(now - lastCommandTime);
+    if (diff < 0)
+      diff = 0;
+
+    if (!motorStopped && (uint64_t)diff > AUTOSTOP_TIMEOUT_MS) {
       stop();
       Serial.println("[AutoStop] No command for 500ms, stopping motors");
     }
