@@ -5,8 +5,8 @@
 #include <WiFiManager.h>
 
 static bool isClientActive = false;
-httpd_handle_t stream_httpd = NULL;
-httpd_handle_t camera_httpd = NULL;
+static httpd_handle_t stream_httpd = NULL;
+static httpd_handle_t camera_httpd = NULL;
 extern Car car;
 extern WiFiManager wm;
 
@@ -30,43 +30,47 @@ void sendResponse(httpd_req_t *req, const char *message) {
   }
 }
 
-bool setFrameSize(const char *sizeName) {
-  sensor_t *s = esp_camera_sensor_get();
-  if (!s)
-    return false;
+static esp_err_t serveStaticFile(httpd_req_t *req, const char *filepath) {
+  String path = filepath;
 
-  framesize_t newSize;
-  if (strcmp(sizeName, "FRAMESIZE_240X240") == 0)
-    newSize = FRAMESIZE_240X240;
-  else if (strcmp(sizeName, "FRAMESIZE_HVGA") == 0)
-    newSize = FRAMESIZE_HVGA;
-  else if (strcmp(sizeName, "FRAMESIZE_VGA") == 0)
-    newSize = FRAMESIZE_VGA;
-  else if (strcmp(sizeName, "FRAMESIZE_SVGA") == 0)
-    newSize = FRAMESIZE_SVGA;
-  else if (strcmp(sizeName, "FRAMESIZE_XGA") == 0)
-    newSize = FRAMESIZE_XGA;
-  else if (strcmp(sizeName, "FRAMESIZE_HD") == 0)
-    newSize = FRAMESIZE_HD;
-  else if (strcmp(sizeName, "FRAMESIZE_UXGA") == 0)
-    newSize = FRAMESIZE_UXGA;
-  else
-    return false;
+  const char *type = "text/plain";
+  if (path.endsWith(".html"))
+    type = "text/html";
+  else if (path.endsWith(".js"))
+    type = "application/javascript";
+  else if (path.endsWith(".css"))
+    type = "text/css";
+  else if (path.endsWith(".png"))
+    type = "image/png";
+  else if (path.endsWith(".jpg") || path.endsWith(".jpeg"))
+    type = "image/jpeg";
+  else if (path.endsWith(".ico"))
+    type = "image/x-icon";
 
-  s->set_framesize(s, newSize);
-  Serial.printf("✅ Frame size changed to %s\n", sizeName);
-  return true;
-}
-
-int getClientRSSI() {
-  wifi_sta_list_t wifi_sta_list;
-  esp_wifi_ap_get_sta_list(&wifi_sta_list);
-
-  if (wifi_sta_list.num == 0) {
-    return 0;
+  File file = LittleFS.open(path, "r");
+  if (!file) {
+    Serial.printf("404 Not Found: %s\n", path.c_str());
+    httpd_resp_send_404(req);
+    return ESP_FAIL;
   }
 
-  return wifi_sta_list.sta[0].rssi;
+  httpd_resp_set_type(req, type);
+
+  char chunk[512];
+  size_t chunksize;
+  do {
+    chunksize = file.readBytes(chunk, sizeof(chunk));
+    if (chunksize > 0) {
+      if (httpd_resp_send_chunk(req, chunk, chunksize) != ESP_OK) {
+        file.close();
+        return ESP_FAIL;
+      }
+    }
+  } while (chunksize > 0);
+
+  file.close();
+  httpd_resp_send_chunk(req, NULL, 0);
+  return ESP_OK;
 }
 
 void handleCarCommand(const char *command, httpd_req_t *req) {
@@ -93,8 +97,16 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
 
   if (strncmp(command, "frameSize_", 10) == 0) {
     const char *sizeName = command + 10;
+    sensor_t *s = esp_camera_sensor_get();
 
-    setFrameSize(sizeName);
+    if (!s) {
+      return;
+    }
+
+    framesize_t newSize = stringToFrameSize(sizeName);
+
+    s->set_framesize(s, newSize);
+    Serial.printf("✅ Frame size changed to %s\n", sizeName);
 
     return;
   }
@@ -137,7 +149,7 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
 
   if (strcmp(command, "right") == 0) {
     car.turnRight();
-    
+
     return;
   }
 
@@ -172,57 +184,6 @@ void handleCarCommand(const char *command, httpd_req_t *req) {
   }
 
   Serial.printf("Unknown command: %s\n", command);
-}
-
-const char *frameSizeToString(framesize_t size) {
-  switch (size) {
-  case FRAMESIZE_96X96:
-    return "FRAMESIZE_96X96";
-  case FRAMESIZE_QQVGA:
-    return "FRAMESIZE_QQVGA";
-  case FRAMESIZE_QCIF:
-    return "FRAMESIZE_QCIF";
-  case FRAMESIZE_HQVGA:
-    return "FRAMESIZE_HQVGA";
-  case FRAMESIZE_240X240:
-    return "FRAMESIZE_240X240";
-  case FRAMESIZE_QVGA:
-    return "FRAMESIZE_QVGA";
-  case FRAMESIZE_CIF:
-    return "FRAMESIZE_CIF";
-  case FRAMESIZE_HVGA:
-    return "FRAMESIZE_HVGA";
-  case FRAMESIZE_VGA:
-    return "FRAMESIZE_VGA";
-  case FRAMESIZE_SVGA:
-    return "FRAMESIZE_SVGA";
-  case FRAMESIZE_XGA:
-    return "FRAMESIZE_XGA";
-  case FRAMESIZE_HD:
-    return "FRAMESIZE_HD";
-  case FRAMESIZE_SXGA:
-    return "FRAMESIZE_SXGA";
-  case FRAMESIZE_UXGA:
-    return "FRAMESIZE_UXGA";
-  case FRAMESIZE_FHD:
-    return "FRAMESIZE_FHD";
-  case FRAMESIZE_P_HD:
-    return "FRAMESIZE_P_HD";
-  case FRAMESIZE_P_3MP:
-    return "FRAMESIZE_P_3MP";
-  case FRAMESIZE_QXGA:
-    return "FRAMESIZE_QXGA";
-  case FRAMESIZE_QHD:
-    return "FRAMESIZE_QHD";
-  case FRAMESIZE_WQXGA:
-    return "FRAMESIZE_WQXGA";
-  case FRAMESIZE_P_FHD:
-    return "FRAMESIZE_P_FHD";
-  case FRAMESIZE_QSXGA:
-    return "FRAMESIZE_QSXGA";
-  default:
-    return "UNKNOWN";
-  }
 }
 
 static esp_err_t websocketHandler(httpd_req_t *req) {
@@ -360,50 +321,6 @@ static esp_err_t streamHandler(httpd_req_t *req) {
   return res;
 }
 
-static esp_err_t serveStaticFile(httpd_req_t *req, const char *filepath) {
-  String path = filepath;
-
-  // Determine content type
-  const char *type = "text/plain";
-  if (path.endsWith(".html"))
-    type = "text/html";
-  else if (path.endsWith(".js"))
-    type = "application/javascript";
-  else if (path.endsWith(".css"))
-    type = "text/css";
-  else if (path.endsWith(".png"))
-    type = "image/png";
-  else if (path.endsWith(".jpg") || path.endsWith(".jpeg"))
-    type = "image/jpeg";
-  else if (path.endsWith(".ico"))
-    type = "image/x-icon";
-
-  File file = LittleFS.open(path, "r");
-  if (!file) {
-    Serial.printf("404 Not Found: %s\n", path.c_str());
-    httpd_resp_send_404(req);
-    return ESP_FAIL;
-  }
-
-  httpd_resp_set_type(req, type);
-
-  char chunk[512];
-  size_t chunksize;
-  do {
-    chunksize = file.readBytes(chunk, sizeof(chunk));
-    if (chunksize > 0) {
-      if (httpd_resp_send_chunk(req, chunk, chunksize) != ESP_OK) {
-        file.close();
-        return ESP_FAIL;
-      }
-    }
-  } while (chunksize > 0);
-
-  file.close();
-  httpd_resp_send_chunk(req, NULL, 0);
-  return ESP_OK;
-}
-
 static esp_err_t capturePhotoHandler(httpd_req_t *req) {
   camera_fb_t *fb = NULL;
   esp_err_t res = ESP_OK;
@@ -507,6 +424,7 @@ void startCarServer() {
       .user_ctx = NULL};
 
   Serial.printf("Starting stream server on port: '%d'\n", config.server_port);
+  
   if (httpd_start(&stream_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(stream_httpd, &stream_uri);
     Serial.println("Stream server started on port 81");
