@@ -36,10 +36,6 @@
 #define LEFT_MOTOR_CHANNEL_1 3
 #define LEFT_MOTOR_CHANNEL_2 5
 
-inline uint64_t nowMs() {
-  return esp_timer_get_time() / 1000ULL;
-}
-
 static camera_config_t camera_config = {
     .pin_pwdn = PWDN_GPIO_NUM,
     .pin_reset = RESET_GPIO_NUM,
@@ -108,18 +104,8 @@ public:
   void tick() {
     updateServo();
     tickAutoStop();
-  }
-
-  void turnOnFlash() {
-    digitalWrite(FLASH_PIN, HIGH);
-    motorMax = 250;
-    flashState = true;
-  }
-
-  void turnOffFlash() {
-    digitalWrite(FLASH_PIN, LOW);
-    motorMax = 200;
-    flashState = false;
+    motorL.tick();
+    motorR.tick();
   }
 
   void toggleFlash() {
@@ -209,9 +195,7 @@ private:
     uint64_t now = nowMs();
     const int stepDelay = 5;
 
-    int64_t diff = (int64_t)(now - lastUpdate);
-    if (diff < 0)
-      diff = 0;
+    int64_t diff = elapsedSince(lastUpdate);
 
     if (diff < stepDelay)
       return;
@@ -236,9 +220,7 @@ private:
     const uint64_t AUTOSTOP_TIMEOUT_MS = 500;
     uint64_t now = nowMs();
 
-    int64_t diff = (int64_t)(now - lastCommandTime);
-    if (diff < 0)
-      diff = 0;
+    int64_t diff = elapsedSince(lastCommandTime);
 
     if (!motorStopped && (uint64_t)diff > AUTOSTOP_TIMEOUT_MS) {
       stop();
