@@ -157,26 +157,26 @@ public:
 
   void moveForwardLeft() {
     onCommand();
-    motorL.moveForward(motorMax / 1.2);
+    motorL.moveForward(motorMax / 1.5);
     motorR.moveForward(motorMax);
   }
 
   void moveForwardRight() {
     onCommand();
     motorL.moveForward(motorMax);
-    motorR.moveForward(motorMax / 1.2);
+    motorR.moveForward(motorMax / 1.5);
   }
 
   void moveBackwardLeft() {
     onCommand();
-    motorL.moveBackward(motorMax / 1.2);
+    motorL.moveBackward(motorMax / 1.5);
     motorR.moveBackward(motorMax);
   }
 
   void moveBackwardRight() {
     onCommand();
     motorL.moveBackward(motorMax);
-    motorR.moveBackward(motorMax / 1.2);
+    motorR.moveBackward(motorMax / 1.5);
   }
 
   void stop() {
@@ -268,6 +268,9 @@ private:
   }
 
   void initMotors() {
+    motorL.setMinPwm(200);
+    motorR.setMinPwm(200);
+
     motorL.begin();
     motorR.begin();
   }
