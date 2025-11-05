@@ -60,7 +60,6 @@ void ledTask(void *param) {
       if (now - lastBlink >= (unsigned long)interval) {
         lastBlink = now;
         ledState = !ledState;
-        Serial.println(ledState);
         ledcWrite(LEDC_CHANNEL, ledState ? 255 : 0);
       }
     }
