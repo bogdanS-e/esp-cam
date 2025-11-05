@@ -4,7 +4,7 @@
 #include "esp_http_server.h"
 #include <WiFiManager.h>
 
-static bool isClientActive = false;
+bool isClientActive = false;
 static httpd_handle_t stream_httpd = NULL;
 static httpd_handle_t camera_httpd = NULL;
 extern Car car;

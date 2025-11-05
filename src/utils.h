@@ -129,3 +129,12 @@ int getClientRSSI() {
 
   return wifi_sta_list.sta[0].rssi;
 }
+
+void blink(int pin, int count, int delayMs = 200) {
+  for (int i = 0; i < count; i++) {
+    digitalWrite(pin, LOW);
+    delay(delayMs);
+    digitalWrite(pin, HIGH);
+      delay(delayMs);
+  }
+}
