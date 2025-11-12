@@ -10,7 +10,6 @@ static httpd_handle_t camera_httpd = NULL;
 extern Car car;
 extern WiFiManager wm;
 
-// Send response via WebSocket
 void sendResponse(httpd_req_t *req, const char *message) {
   if (!req || !message) {
     return;

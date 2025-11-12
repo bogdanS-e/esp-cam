@@ -75,13 +75,6 @@ public:
         motorL(LEFT_MOTOR_PWM_1, LEFT_MOTOR_PWM_2, LEFT_MOTOR_CHANNEL_1, LEFT_MOTOR_CHANNEL_2),
         motorR(RIGHT_MOTOR_PWM_1, RIGHT_MOTOR_PWM_2, RIGHT_MOTOR_CHANNEL_1, RIGHT_MOTOR_CHANNEL_2) {}
 
-  void preinit() {
-    digitalWrite(LEFT_MOTOR_PWM_1, LOW);
-    digitalWrite(LEFT_MOTOR_PWM_2, LOW);
-    digitalWrite(RIGHT_MOTOR_PWM_1, LOW);
-    digitalWrite(RIGHT_MOTOR_PWM_2, LOW);
-  }
-
   esp_err_t init() {
     pinMode(FLASH_PIN, OUTPUT);
     digitalWrite(FLASH_PIN, LOW);
@@ -197,21 +190,23 @@ private:
 
     int64_t diff = elapsedSince(lastUpdate);
 
-    if (diff < stepDelay)
+    if (diff < stepDelay) {
       return;
+    }
 
     lastUpdate = now;
 
-    if (currentAngleX == targetAngleX)
+    if (currentAngleX == targetAngleX) {
       return;
+    }
 
-    int delta = targetAngleX - currentAngleX;
-    int step = constrain(abs(delta) / 4 + 1, 1, 8);
+    const int delta = targetAngleX - currentAngleX;
+    const int step = constrain(abs(delta) / 4 + 1, 1, 8);
     currentAngleX += (delta > 0) ? step : -step;
 
-    if ((delta > 0 && currentAngleX > targetAngleX) ||
-        (delta < 0 && currentAngleX < targetAngleX))
+    if ((delta > 0 && currentAngleX > targetAngleX) || (delta < 0 && currentAngleX < targetAngleX)) {
       currentAngleX = targetAngleX;
+    }
 
     servoX.write(currentAngleX);
   }
@@ -237,6 +232,7 @@ private:
     }
 
     sensor_t *s = esp_camera_sensor_get();
+    
     if (!s) {
       Serial.println("NO SENSOR DETECTED");
       return ESP_FAIL;
@@ -258,4 +254,4 @@ private:
   }
 };
 
-#endif // CAR_H
+#endif

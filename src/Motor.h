@@ -1,7 +1,8 @@
 #pragma once
-#include <Arduino.h>
 #include "utils.h"
+#include <Arduino.h>
 
+#define MOTOR_PWM_FREQ 1000
 class Motor {
 public:
   enum class Direction : uint8_t {
@@ -10,11 +11,9 @@ public:
     BACKWARD
   };
 
-  Motor(int pinIN1, int pinIN2, int pwmChannel1, int pwmChannel2,
-        int pwmFreq = 1000, int pwmResolution = 8)
+  Motor(int pinIN1, int pinIN2, int pwmChannel1, int pwmChannel2)
       : _pinIN1(pinIN1), _pinIN2(pinIN2),
         _pwmChannel1(pwmChannel1), _pwmChannel2(pwmChannel2),
-        _pwmFreq(pwmFreq), _pwmResolution(pwmResolution),
         _minPwm(0),
         _currentSpeed(0),
         _targetSpeed(0),
@@ -27,8 +26,8 @@ public:
     pinMode(_pinIN1, OUTPUT);
     pinMode(_pinIN2, OUTPUT);
 
-    ledcSetup(_pwmChannel1, _pwmFreq, _pwmResolution);
-    ledcSetup(_pwmChannel2, _pwmFreq, _pwmResolution);
+    ledcSetup(_pwmChannel1, MOTOR_PWM_FREQ, 8);
+    ledcSetup(_pwmChannel2, MOTOR_PWM_FREQ, 8);
 
     ledcAttachPin(_pinIN1, _pwmChannel1);
     ledcAttachPin(_pinIN2, _pwmChannel2);
@@ -70,48 +69,43 @@ public:
 
     _lastUpdate = nowMs();
 
-    if (_direction != Direction::STOP) {
-      if (_currentSpeed == 0 && _targetSpeed > 0) {
-        _currentSpeed = _minPwm;
-      }
-
-      if (_currentSpeed < _targetSpeed) {
-        _currentSpeed = std::min<uint8_t>(_currentSpeed + _accelStep, _targetSpeed);
-      } else if (_currentSpeed > _targetSpeed) {
-        _currentSpeed = std::max<uint8_t>(_currentSpeed - _accelStep, _targetSpeed);
-      }
-
-      switch (_direction) {
-      case Direction::FORWARD:
-        ledcWrite(_pwmChannel1, _currentSpeed);
-        ledcWrite(_pwmChannel2, 0);
-        Serial.printf("Motor FORWARD - Speed: %d\n", _currentSpeed);
-        break;
-      case Direction::BACKWARD:
-        ledcWrite(_pwmChannel1, 0);
-        ledcWrite(_pwmChannel2, _currentSpeed);
-        Serial.printf("Motor BACKWARD - Speed: %d\n", _currentSpeed);
-        break;
-      default:
-        break;
-      }
+    if (_direction == Direction::STOP) {
+      ledcWrite(_pwmChannel1, 0);
+      ledcWrite(_pwmChannel2, 0);
+      _currentSpeed = 0;
 
       return;
     }
 
-    ledcWrite(_pwmChannel1, 0);
-    ledcWrite(_pwmChannel2, 0);
-    _currentSpeed = 0;
-  }
+    if (_currentSpeed == 0 && _targetSpeed > 0) {
+      _currentSpeed = _minPwm;
+    }
 
-  Direction direction() const { return _direction; }
-  uint8_t currentSpeed() const { return _currentSpeed; }
+    if (_currentSpeed < _targetSpeed) {
+      _currentSpeed = std::min<uint8_t>(_currentSpeed + _accelStep, _targetSpeed);
+    } else if (_currentSpeed > _targetSpeed) {
+      _currentSpeed = std::max<uint8_t>(_currentSpeed - _accelStep, _targetSpeed);
+    }
+
+    switch (_direction) {
+    case Direction::FORWARD:
+      ledcWrite(_pwmChannel1, _currentSpeed);
+      ledcWrite(_pwmChannel2, 0);
+      Serial.printf("Motor FORWARD - Speed: %d\n", _currentSpeed);
+      break;
+    case Direction::BACKWARD:
+      ledcWrite(_pwmChannel1, 0);
+      ledcWrite(_pwmChannel2, _currentSpeed);
+      Serial.printf("Motor BACKWARD - Speed: %d\n", _currentSpeed);
+      break;
+    default:
+      break;
+    }
+  }
 
 private:
   int _pinIN1, _pinIN2;
   int _pwmChannel1, _pwmChannel2;
-  int _pwmFreq;
-  int _pwmResolution;
 
   uint8_t _minPwm;
   uint8_t _currentSpeed;
