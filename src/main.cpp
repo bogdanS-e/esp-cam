@@ -1,5 +1,6 @@
 #include "LittleFS.h"
 #include "esp_timer.h"
+#include "esp_camera.h"
 #include "fb_gfx.h"
 #include "soc/rtc_cntl_reg.h"
 #include "soc/soc.h"
@@ -7,6 +8,7 @@
 #include <WiFi.h>
 #include <WiFiManager.h>
 
+#include "config.h"
 #include "Car.h"
 #include "carServer.h"
 #include "customApSuccess.h"

@@ -23,7 +23,14 @@ function handleRotationScreen() {
   window.addEventListener("resize", checkOrientation);
 }
 
+let lastStatus = null;
 function showStatus(isConnected) {
+  if (lastStatus === isConnected) {
+    return;
+  }
+
+  lastStatus = isConnected;
+
   clearTimeout(statusElement._hideTimer);
   statusElement.classList.add("visible");
 
@@ -123,6 +130,8 @@ function handleWebSocket() {
 
   ws.onmessage = (event) => {
     if (event.data.startsWith("pong-")) {
+      showStatus(true);
+
       missedPongs = 0;
 
       const rssi = parseInt(event.data.split("-")[1]);

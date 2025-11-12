@@ -317,6 +317,8 @@ static esp_err_t streamHandler(httpd_req_t *req) {
 
   isClientActive = false;
   Serial.println("Stream ended - client unlocked");
+  car.stop();
+  car.turnFlashOff();
   return res;
 }
 

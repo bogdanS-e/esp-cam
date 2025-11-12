@@ -2,39 +2,7 @@
 #define CAR_H
 
 #include "Motor.h"
-#include "esp_camera.h"
 #include <ESP32Servo.h>
-
-#define CAMERA_MODEL_AI_THINKER
-#define PWDN_GPIO_NUM 32
-#define RESET_GPIO_NUM -1
-#define XCLK_GPIO_NUM 0
-#define SIOD_GPIO_NUM 26
-#define SIOC_GPIO_NUM 27
-#define Y9_GPIO_NUM 35
-#define Y8_GPIO_NUM 34
-#define Y7_GPIO_NUM 39
-#define Y6_GPIO_NUM 36
-#define Y5_GPIO_NUM 21
-#define Y4_GPIO_NUM 19
-#define Y3_GPIO_NUM 18
-#define Y2_GPIO_NUM 5
-#define VSYNC_GPIO_NUM 25
-#define HREF_GPIO_NUM 23
-#define PCLK_GPIO_NUM 22
-
-#define SERVO_PIN 2
-#define FLASH_PIN 4
-
-#define RIGHT_MOTOR_PWM_1 12
-#define RIGHT_MOTOR_PWM_2 13
-#define RIGHT_MOTOR_CHANNEL_1 2
-#define RIGHT_MOTOR_CHANNEL_2 4
-
-#define LEFT_MOTOR_PWM_1 14
-#define LEFT_MOTOR_PWM_2 15
-#define LEFT_MOTOR_CHANNEL_1 3
-#define LEFT_MOTOR_CHANNEL_2 5
 
 static camera_config_t camera_config = {
     .pin_pwdn = PWDN_GPIO_NUM,
@@ -66,14 +34,14 @@ static camera_config_t camera_config = {
 class Car {
 public:
   Car()
-      : flashState(false),
+      : isFlashOn(false),
         currentAngleX(90),
         targetAngleX(90),
         lastUpdate(0),
         lastCommandTime(0),
         motorStopped(true),
-        motorL(LEFT_MOTOR_PWM_1, LEFT_MOTOR_PWM_2, LEFT_MOTOR_CHANNEL_1, LEFT_MOTOR_CHANNEL_2),
-        motorR(RIGHT_MOTOR_PWM_1, RIGHT_MOTOR_PWM_2, RIGHT_MOTOR_CHANNEL_1, RIGHT_MOTOR_CHANNEL_2) {}
+        motorL(LEFT_MOTOR_IN1, LEFT_MOTOR_IN2, LEFT_MOTOR_PWM_CHANNEL_1, LEFT_MOTOR_PWM_CHANNEL_2),
+        motorR(RIGHT_MOTOR_IN1, RIGHT_MOTOR_IN2, RIGHT_MOTOR_PWM_CHANNEL_1, RIGHT_MOTOR_PWM_CHANNEL_2) {}
 
   esp_err_t init() {
     pinMode(FLASH_PIN, OUTPUT);
@@ -81,7 +49,7 @@ public:
 
     initMotors();
 
-    servoX.attach(SERVO_PIN);
+    servoX.attach(SERVO_X_PIN);
     servoX.write(90);
 
     lastCommandTime = nowMs();
@@ -102,12 +70,17 @@ public:
   }
 
   void toggleFlash() {
-    flashState = !flashState;
-    digitalWrite(FLASH_PIN, flashState ? HIGH : LOW);
+    isFlashOn = !isFlashOn;
+    digitalWrite(FLASH_PIN, isFlashOn ? HIGH : LOW);
+  }
+
+  void turnFlashOff() {
+    isFlashOn = false;
+    digitalWrite(FLASH_PIN, LOW);
   }
 
   bool getFlashState() {
-    return flashState;
+    return isFlashOn;
   }
 
   void moveForward() {
@@ -170,7 +143,7 @@ public:
   }
 
 private:
-  bool flashState;
+  bool isFlashOn;
   Servo servoX;
 
   int currentAngleX;
