@@ -64,7 +64,6 @@ void ledTask(void *param) {
       }
     }
 
-    // 🔹 обязательно, чтобы не зависала задача
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
