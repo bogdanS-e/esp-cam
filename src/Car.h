@@ -2,7 +2,7 @@
 #define CAR_H
 
 #include "Motor.h"
-#include <ESP32Servo.h>
+#include <Servo.h>
 
 static camera_config_t camera_config = {
     .pin_pwdn = PWDN_GPIO_NUM,
@@ -49,7 +49,8 @@ public:
 
     initMotors();
 
-    servoX.attach(SERVO_X_PIN);
+    bool res = servoX.attach(SERVO_X_PIN, 6);
+    Serial.printf("Servo X attach result: %s\n", res ? "SUCCESS" : "FAILURE");
     servoX.write(90);
 
     lastCommandTime = nowMs();
